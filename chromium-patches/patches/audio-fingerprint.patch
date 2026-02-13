@@ -1,0 +1,112 @@
+From: VirtualBrowser Team <virtual.browser.2020@gmail.com>
+Subject: [PATCH] AudioContext Fingerprint Spoofing
+---
+This patch modifies AudioContext to add consistent noise to audio fingerprinting.
+
+diff --git a/third_party/blink/renderer/modules/webaudio/audio_buffer_source_node.cc b/third_party/blink/renderer/modules/webaudio/audio_buffer_source_node.cc
+index 1234567..abcdefg 100644
+--- a/third_party/blink/renderer/modules/webaudio/audio_buffer_source_node.cc
++++ b/third_party/blink/renderer/modules/webaudio/audio_buffer_source_node.cc
+@@ -33,6 +33,7 @@
+ #include "third_party/blink/renderer/modules/webaudio/audio_buffer_source_node.h"
+ 
+ #include <algorithm>
++#include "third_party/blink/renderer/core/fingerprint/fingerprint_generator.h"
+ 
+ namespace blink {
+ 
+diff --git a/third_party/blink/renderer/modules/webaudio/analyser_node.cc b/third_party/blink/renderer/modules/webaudio/analyser_node.cc
+index 1234567..abcdefg 100644
+--- a/third_party/blink/renderer/modules/webaudio/analyser_node.cc
++++ b/third_party/blink/renderer/modules/webaudio/analyser_node.cc
+@@ -31,6 +31,8 @@
+ #include "third_party/blink/renderer/modules/webaudio/analyser_node.h"
+ 
+ #include <algorithm>
++#include <random>
++#include "third_party/blink/renderer/core/fingerprint/fingerprint_generator.h"
+ 
+ #include "third_party/blink/renderer/bindings/modules/v8/v8_analyser_options.h"
+ #include "third_party/blink/renderer/core/execution_context/execution_context.h"
+@@ -150,6 +152,23 @@ void AnalyserNode::getFloatFrequencyData(NotShared<DOMFloat32Array> array) {
+ 
+   analyser_handler.GetFloatFrequencyData(array.Data(), array->length());
+ 
++  // VirtualBrowser: Apply audio fingerprint noise
++  if (FingerprintGenerator::IsEnabled()) {
++    uint32_t seed = FingerprintGenerator::GetSeed();
++    std::mt19937 rng(seed);
++    std::uniform_real_distribution<float> noise_dist(-0.0001f, 0.0001f);
++    
++    int noise_count = array->length() / 100;
++    std::uniform_int_distribution<int> pos_dist(0, array->length() - 1);
++    
++    for (int i = 0; i < noise_count; ++i) {
++      int pos = pos_dist(rng);
++      float noise = noise_dist(rng);
++      array.Data()[pos] += noise;
++    }
++  }
++
+   CheckNumberOfChannelsChanged();
+ }
+ 
+@@ -158,6 +177,23 @@ void AnalyserNode::getByteFrequencyData(NotShared<DOMUint8Array> array) {
+ 
+   analyser_handler.GetByteFrequencyData(array.Data(), array->length());
+ 
++  // VirtualBrowser: Apply audio fingerprint noise
++  if (FingerprintGenerator::IsEnabled()) {
++    uint32_t seed = FingerprintGenerator::GetSeed();
++    std::mt19937 rng(seed);
++    std::uniform_int_distribution<int> noise_dist(-1, 1);
++    
++    int noise_count = array->length() / 100;
++    std::uniform_int_distribution<int> pos_dist(0, array->length() - 1);
++    
++    for (int i = 0; i < noise_count; ++i) {
++      int pos = pos_dist(rng);
++      int noise = noise_dist(rng);
++      int new_value = static_cast<int>(array.Data()[pos]) + noise;
++      array.Data()[pos] = static_cast<uint8_t>(std::max(0, std::min(255, new_value)));
++    }
++  }
++
+   CheckNumberOfChannelsChanged();
+ }
+ 
+diff --git a/third_party/blink/renderer/modules/webaudio/audio_buffer.cc b/third_party/blink/renderer/modules/webaudio/audio_buffer.cc
+index 1234567..abcdefg 100644
+--- a/third_party/blink/renderer/modules/webaudio/audio_buffer.cc
++++ b/third_party/blink/renderer/modules/webaudio/audio_buffer.cc
+@@ -34,6 +34,8 @@
+ 
+ #include <algorithm>
+ #include <cmath>
++#include <random>
++#include "third_party/blink/renderer/core/fingerprint/fingerprint_generator.h"
+ 
+ #include "third_party/blink/renderer/bindings/modules/v8/v8_audio_buffer_options.h"
+ #include "third_party/blink/renderer/core/execution_context/execution_context.h"
+@@ -152,6 +154,20 @@ NotShared<DOMFloat32Array> AudioBuffer::getChannelData(
+     return channel_data;
+   }
+ 
++  // VirtualBrowser: Apply noise to getChannelData
++  if (FingerprintGenerator::IsEnabled()) {
++    uint32_t seed = FingerprintGenerator::GetSeed();
++    std::mt19937 rng(seed ^ channel_index);
++    std::uniform_real_distribution<float> noise_dist(-1e-7f, 1e-7f);
++    
++    int noise_count = channel_data->length() / 200;
++    std::uniform_int_distribution<int> pos_dist(0, channel_data->length() - 1);
++    
++    for (int i = 0; i < noise_count; ++i) {
++      int pos = pos_dist(rng);
++      channel_data.Data()[pos] += noise_dist(rng);
++    }
++  }
++
+   return channel_data;
+ }
+ 

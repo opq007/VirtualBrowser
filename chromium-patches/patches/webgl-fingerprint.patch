@@ -1,0 +1,98 @@
+From: VirtualBrowser Team <virtual.browser.2020@gmail.com>
+Subject: [PATCH] WebGL Fingerprint Spoofing
+---
+This patch modifies WebGL parameters and rendering results to prevent
+WebGL fingerprinting tracking.
+
+diff --git a/third_party/blink/renderer/modules/webgl/webgl_rendering_context_base.cc b/third_party/blink/renderer/modules/webgl/webgl_rendering_context_base.cc
+index 1234567..abcdefg 100644
+--- a/third_party/blink/renderer/modules/webgl/webgl_rendering_context_base.cc
++++ b/third_party/blink/renderer/modules/webgl/webgl_rendering_context_base.cc
+@@ -35,6 +35,7 @@
+ #include "base/metrics/histogram_functions.h"
+ #include "base/numerics/checked_math.h"
+ #include "third_party/blink/renderer/bindings/modules/v8/v8_webgl_any.h"
++#include "third_party/blink/renderer/core/fingerprint/fingerprint_generator.h"
+ 
+ namespace blink {
+ 
+@@ -1250,6 +1251,47 @@ ScriptValue WebGLRenderingContextBase::getParameter(
+     ScriptState* script_state, GLenum pname) {
+   ...
+   switch (pname) {
++    case GL_VENDOR:
++      if (FingerprintGenerator::IsEnabled()) {
++        String vendor = FingerprintGenerator::GetGpuVendor();
++        if (!vendor.IsEmpty()) {
++          return WebGLAny(script_state, vendor);
++        }
++      }
++      return WebGLAny(script_state, context_gl_->GetString(GL_VENDOR));
++
++    case GL_RENDERER:
++      if (FingerprintGenerator::IsEnabled()) {
++        String renderer = FingerprintGenerator::GetGpuRenderer();
++        if (!renderer.IsEmpty()) {
++          return WebGLAny(script_state, renderer);
++        }
++      }
++      return WebGLAny(script_state, context_gl_->GetString(GL_RENDERER));
++
++    case GL_UNMASKED_VENDOR_WEBGL:
++      if (FingerprintGenerator::IsEnabled()) {
++        String vendor = FingerprintGenerator::GetGpuVendor();
++        if (!vendor.IsEmpty()) {
++          return WebGLAny(script_state, vendor);
++        }
++      }
++      return WebGLAny(script_state, context_gl_->GetString(GL_UNMASKED_VENDOR_WEBGL));
++
++    case GL_UNMASKED_RENDERER_WEBGL:
++      if (FingerprintGenerator::IsEnabled()) {
++        String renderer = FingerprintGenerator::GetGpuRenderer();
++        if (!renderer.IsEmpty()) {
++          return WebGLAny(script_state, renderer);
++        }
++      }
++      return WebGLAny(script_state, context_gl_->GetString(GL_UNMASKED_RENDERER_WEBGL));
+   }
+ }
+ 
+@@ -3500,6 +3542,24 @@ void WebGLRenderingContextBase::readPixelsHelper(
+     return;
+   }
+ 
++  // VirtualBrowser: Apply WebGL fingerprint noise
++  if (FingerprintGenerator::IsEnabled()) {
++    uint32_t seed = FingerprintGenerator::GetSeed();
++    std::mt19937 rng(seed ^ width ^ height);
++    std::uniform_int_distribution<int> noise_dist(-2, 2);
++    
++    int noise_pixels = (width * height) / 500;
++    std::uniform_int_distribution<int> pos_dist(0, width * height * 4 - 1);
++    
++    for (int i = 0; i < noise_pixels; ++i) {
++      int pos = pos_dist(rng);
++      int channel = pos % 4;
++      if (channel != 3) { // Don't modify alpha
++        int noise = noise_dist(rng);
++        pixels[pos] = static_cast<uint8_t>(std::max(0, std::min(255, pixels[pos] + noise)));
++      }
++    }
++  }
++  
+   context_gl_->ReadPixels(x, y, width, height, format, type, pixels);
+ }
+
+diff --git a/third_party/blink/renderer/modules/webgl/webgl2_rendering_context.cc b/third_party/blink/renderer/modules/webgl/webgl2_rendering_context.cc
+index 1234567..abcdefg 100644
+--- a/third_party/blink/renderer/modules/webgl/webgl2_rendering_context.cc
++++ b/third_party/blink/renderer/modules/webgl/webgl2_rendering_context.cc
+@@ -28,6 +28,7 @@
+ #include "third_party/blink/renderer/modules/webgl/webgl2_rendering_context.h"
+ 
+ #include "third_party/blink/renderer/modules/webgl/webgl2_compute_context.h"
++#include "third_party/blink/renderer/core/fingerprint/fingerprint_generator.h"
+ 
+ namespace blink {
+ 

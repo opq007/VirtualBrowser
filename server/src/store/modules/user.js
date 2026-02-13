@@ -1,19 +1,14 @@
-import { login, logout, getInfo } from '@/api/user'
-import { getToken, setToken, removeToken } from '@/utils/auth'
+// 本地模式：简化用户状态管理，无需远程API
 import router, { resetRouter } from '@/router'
 
 const state = {
-  token: getToken(),
-  name: '',
+  name: 'Local User',
   avatar: '',
-  introduction: '',
-  roles: []
+  introduction: 'Local mode user',
+  roles: ['admin']
 }
 
 const mutations = {
-  SET_TOKEN: (state, token) => {
-    state.token = token
-  },
   SET_INTRODUCTION: (state, introduction) => {
     state.introduction = introduction
   },
@@ -29,102 +24,36 @@ const mutations = {
 }
 
 const actions = {
-  // user login
+  // 本地模式：直接返回成功
   login({ commit }, userInfo) {
-    const { username, password } = userInfo
-    return new Promise((resolve, reject) => {
-      login({ username: username.trim(), password: password })
-        .then(response => {
-          const { data } = response
-          commit('SET_TOKEN', data.token)
-          setToken(data.token)
-          resolve()
-        })
-        .catch(error => {
-          reject(error)
-        })
-    })
+    return Promise.resolve()
   },
 
-  // get user info
+  // 本地模式：返回本地用户信息
   getInfo({ commit, state }) {
-    return new Promise((resolve, reject) => {
-      getInfo(state.token)
-        .then(response => {
-          const { data } = response
-
-          if (!data) {
-            reject('Verification failed, please Login again.')
-          }
-
-          const { roles, name, avatar, introduction } = data
-
-          // roles must be a non-empty array
-          if (!roles || roles.length <= 0) {
-            reject('getInfo: roles must be a non-null array!')
-          }
-
-          commit('SET_ROLES', roles)
-          commit('SET_NAME', name)
-          commit('SET_AVATAR', avatar)
-          commit('SET_INTRODUCTION', introduction)
-          resolve(data)
-        })
-        .catch(error => {
-          reject(error)
-        })
+    return Promise.resolve({
+      roles: state.roles,
+      name: state.name,
+      avatar: state.avatar,
+      introduction: state.introduction
     })
   },
 
-  // user logout
+  // 本地模式：登出无需操作
   logout({ commit, state, dispatch }) {
-    return new Promise((resolve, reject) => {
-      logout(state.token)
-        .then(() => {
-          commit('SET_TOKEN', '')
-          commit('SET_ROLES', [])
-          removeToken()
-          resetRouter()
-
-          // reset visited views and cached views
-          // to fixed https://github.com/PanJiaChen/vue-element-admin/issues/2485
-          dispatch('tagsView/delAllViews', null, { root: true })
-
-          resolve()
-        })
-        .catch(error => {
-          reject(error)
-        })
-    })
+    return Promise.resolve()
   },
 
-  // remove token
+  // 本地模式：重置角色
   resetToken({ commit }) {
-    return new Promise(resolve => {
-      commit('SET_TOKEN', '')
-      commit('SET_ROLES', [])
-      removeToken()
-      resolve()
-    })
+    return Promise.resolve()
   },
 
-  // dynamically modify permissions
+  // 本地模式：动态修改权限（保留功能但简化）
   async changeRoles({ commit, dispatch }, role) {
-    const token = role + '-token'
-
-    commit('SET_TOKEN', token)
-    setToken(token)
-
-    const { roles } = await dispatch('getInfo')
-
+    const roles = [role]
+    commit('SET_ROLES', roles)
     resetRouter()
-
-    // generate accessible routes map based on roles
-    const accessRoutes = await dispatch('permission/generateRoutes', roles, { root: true })
-    // dynamically add accessible routes
-    router.addRoutes(accessRoutes)
-
-    // reset visited views and cached views
     dispatch('tagsView/delAllViews', null, { root: true })
   }
 }

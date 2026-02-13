@@ -1,24 +1,21 @@
-import request from '@/utils/request'
+// 本地模式：无需远程API调用，保留接口以兼容现有代码
 
 export function login(data) {
-  return request({
-    url: '/vue-element-admin/user/login',
-    method: 'post',
-    data
-  })
+  return Promise.resolve({ code: 20000, data: { token: 'local-token' } })
 }
 
 export function getInfo(token) {
-  return request({
-    url: '/vue-element-admin/user/info',
-    method: 'get',
-    params: { token }
+  return Promise.resolve({
+    code: 20000,
+    data: {
+      roles: ['admin'],
+      name: 'Local User',
+      avatar: '',
+      introduction: 'Local mode user'
+    }
   })
 }
 
 export function logout() {
-  return request({
-    url: '/vue-element-admin/user/logout',
-    method: 'post'
-  })
+  return Promise.resolve({ code: 20000, data: 'success' })
 }

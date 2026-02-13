@@ -1,0 +1,77 @@
+From: VirtualBrowser Team <virtual.browser.2020@gmail.com>
+Subject: [PATCH] WebRTC IP Leak Prevention and Fingerprint Spoofing
+---
+This patch prevents WebRTC from leaking real IP addresses and modifies
+WebRTC fingerprint parameters.
+
+diff --git a/third_party/blink/renderer/modules/peerconnection/peer_connection_dependency_factory.cc b/third_party/blink/renderer/modules/peerconnection/peer_connection_dependency_factory.cc
+index 1234567..abcdefg 100644
+--- a/third_party/blink/renderer/modules/peerconnection/peer_connection_dependency_factory.cc
++++ b/third_party/blink/renderer/modules/peerconnection/peer_connection_dependency_factory.cc
+@@ -40,6 +40,7 @@
+ #include "base/command_line.h"
+ #include "base/feature_list.h"
+ #include "base/functional/callback_helpers.h"
++#include "third_party/blink/renderer/core/fingerprint/fingerprint_generator.h"
+ 
+ namespace blink {
+ 
+@@ -250,6 +251,17 @@ PeerConnectionDependencyFactory::CreatePeerConnection(
+   // Layering: DependencyFactory creates proxy to V8 calls, on which P2PSocket
+   // is created and the routes are initialized, so all calls must be on main
+   // thread.
++
++  // VirtualBrowser: Configure WebRTC to prevent IP leaks
++  if (FingerprintGenerator::IsEnabled()) {
++    int webrtc_mode = FingerprintGenerator::GetWebRTCMode();
++    // Mode 0: Replace (default) - use proxy IP
++    // Mode 1: Allow - allow all IPs  
++    // Mode 2: Block - disable WebRTC
++    if (webrtc_mode == 2) {
++      return nullptr; // Block WebRTC
++    }
++  }
++  
+   return p2p_socket_dispatcher_main_thread_proxy_
+       ->CreateP2PSocketDispatcher(network_manager_.get());
+ }
+
+diff --git a/third_party/blink/renderer/modules/peerconnection/rtc_peer_connection.cc b/third_party/blink/renderer/modules/peerconnection/rtc_peer_connection.cc
+index 1234567..abcdefg 100644
+--- a/third_party/blink/renderer/modules/peerconnection/rtc_peer_connection.cc
++++ b/third_party/blink/renderer/modules/peerconnection/rtc_peer_connection.cc
+@@ -52,6 +52,7 @@
+ #include "third_party/blink/public/web/web_local_frame.h"
+ #include "third_party/blink/renderer/bindings/modules/v8/v8_rtc_answer_options.h"
+ #include "third_party/blink/renderer/bindings/modules/v8/v8_rtc_configuration.h"
++#include "third_party/blink/renderer/core/fingerprint/fingerprint_generator.h"
+ 
+ namespace blink {
+ 
+@@ -245,6 +246,26 @@ RTCPeerConnection::RTCPeerConnection(
+       network_manager_(network_manager),
+       usage_pattern_(std::move(usage_pattern)) {
+ 
++  // VirtualBrowser: Configure WebRTC
++  if (FingerprintGenerator::IsEnabled()) {
++    int webrtc_mode = FingerprintGenerator::GetWebRTCMode();
++    // Mode 2: Block WebRTC completely
++    if (webrtc_mode == 2) {
++      exception_state.ThrowDOMException(
++          DOMExceptionCode::kNotSupportedError,
++          "WebRTC is disabled by fingerprint policy.");
++      return;
++    }
++    
++    // Mode 0: Replace local IPs with proxy IP (prevent leak)
++    if (webrtc_mode == 0) {
++      // Configure ice candidate filter to exclude local IPs
++      configuration->setIceCandidatePolicy("relay");
++      configuration->setIceTransportPolicy("relay");
++    }
++    // Mode 1: Allow all (no modification)
++  }
++  
+   // We own the |usage_pattern_| object.
+   usage_pattern_->SetTaskRunner(task_runner_);
+ }

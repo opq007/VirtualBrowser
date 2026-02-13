@@ -34,6 +34,7 @@ import Layout from '@/layout'
  * constantRoutes
  * a base page that does not have permission requirements
  * all roles can be accessed
+ * 本地模式：移除登录相关路由
  */
 export const constantRoutes = [
   {
@@ -46,16 +47,6 @@ export const constantRoutes = [
         component: require('@/views/redirect/index').default
       }
     ]
-  },
-  {
-    path: '/login',
-    component: require('@/views/login/index').default,
-    hidden: true
-  },
-  {
-    path: '/auth-redirect',
-    component: require('@/views/login/auth-redirect').default,
-    hidden: true
   },
   {
     path: '/404',

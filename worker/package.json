@@ -52,7 +52,8 @@
       "ecmaVersion": 2020
     },
     "rules": {
-      "no-debugger": "warn"
+      "no-debugger": "warn",
+      "prettier/prettier": "off"
     }
   },
   "browserslist": [

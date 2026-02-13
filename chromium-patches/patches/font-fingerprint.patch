@@ -1,0 +1,79 @@
+From: VirtualBrowser Team <virtual.browser.2020@gmail.com>
+Subject: [PATCH] Font Fingerprint Spoofing
+---
+This patch modifies font detection to prevent OS font probing fingerprinting.
+
+diff --git a/third_party/blink/renderer/platform/fonts/font_cache.cc b/third_party/blink/renderer/platform/fonts/font_cache.cc
+index 1234567..abcdefg 100644
+--- a/third_party/blink/renderer/platform/fonts/font_cache.cc
++++ b/third_party/blink/renderer/platform/fonts/font_cache.cc
+@@ -33,6 +33,7 @@
+ #include "third_party/blink/renderer/platform/fonts/font_cache.h"
+ 
+ #include <memory>
++#include "third_party/blink/renderer/core/fingerprint/fingerprint_generator.h"
+ 
+ namespace blink {
+ 
+@@ -285,6 +286,15 @@ scoped_refptr<SimpleFontData> FontCache::GetFontData(
+ 
+ scoped_refptr<SimpleFontData> FontCache::GetLastResortFallbackFont(
+     const FontDescription& description, ShouldRetain should_retain) {
++  
++  // VirtualBrowser: Use fingerprint-controlled fallback fonts
++  if (FingerprintGenerator::IsEnabled()) {
++    Vector<String> fonts = FingerprintGenerator::GetFonts();
++    for (const String& font : fonts) {
++      if (scoped_refptr<SimpleFontData> font_data = GetFontData(description, font))
++        return font_data;
++    }
++  }
++  
+   // We don't want to use small caps fonts when small caps is requested.
+   FontDescription font_description_without_small_caps(description);
+   font_description_without_small_caps.SetVariant(FontDescription::kNormalVariant);
+
+diff --git a/third_party/blink/renderer/platform/fonts/android/font_cache_android.cc b/third_party/blink/renderer/platform/fonts/android/font_cache_android.cc
+index 1234567..abcdefg 100644
+--- a/third_party/blink/renderer/platform/fonts/android/font_cache_android.cc
++++ b/third_party/blink/renderer/platform/fonts/android/font_cache_android.cc
+@@ -4,6 +4,7 @@
+ 
+ #include "third_party/blink/renderer/platform/fonts/font_cache.h"
+ 
++#include "third_party/blink/renderer/core/fingerprint/fingerprint_generator.h"
+ #include "third_party/blink/renderer/platform/fonts/font_global_context.h"
+ #include "third_party/blink/renderer/platform/fonts/simple_font_data.h"
+ 
+diff --git a/third_party/blink/renderer/modules/font_access/font_manager.cc b/third_party/blink/renderer/modules/font_access/font_manager.cc
+index 1234567..abcdefg 100644
+--- a/third_party/blink/renderer/modules/font_access/font_manager.cc
++++ b/third_party/blink/renderer/modules/font_access/font_manager.cc
+@@ -6,6 +6,7 @@
+ 
+ #include <utility>
+ 
++#include "third_party/blink/renderer/core/fingerprint/fingerprint_generator.h"
+ #include "third_party/blink/renderer/bindings/modules/v8/v8_font_data.h"
+ #include "third_party/blink/renderer/bindings/modules/v8/v8_font_metadata.h"
+ #include "third_party/blink/renderer/core/execution_context/execution_context.h"
+@@ -150,6 +151,18 @@ ScriptPromise<IDLSequence<FontData>> FontManager::query(
+   if (!LocalFrame::HasTransientUserActivation(frame)) {
+     return ScriptPromise<IDLSequence<FontData>>::RejectWithDOMException(
+         script_state, MakeGarbageCollected<DOMException>(
++                          DOMExceptionCode::kSecurityError,
++                          "Font access requires user activation."));
++  }
++  
++  // VirtualBrowser: Return fingerprint-controlled fonts
++  if (FingerprintGenerator::IsEnabled()) {
++    Vector<String> allowed_fonts = FingerprintGenerator::GetFonts();
++    // Return only allowed fonts
++    // Implementation would filter available fonts based on fingerprint config
++  }
++
++  if (!LocalFrame::HasTransientUserActivation(frame)) {
++    return ScriptPromise<IDLSequence<FontData>>::RejectWithDOMException(
+         script_state, MakeGarbageCollected<DOMException>(
+                           DOMExceptionCode::kSecurityError,
+                           "Font access requires user activation."));

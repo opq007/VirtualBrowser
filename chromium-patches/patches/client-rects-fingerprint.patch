@@ -1,0 +1,54 @@
+From: VirtualBrowser Team <virtual.browser.2020@gmail.com>
+Subject: [PATCH] ClientRects Fingerprint Spoofing
+---
+This patch modifies DOMRect and getBoundingClientRect results to prevent
+element positioning fingerprinting.
+
+diff --git a/third_party/blink/renderer/core/dom/element.cc b/third_party/blink/renderer/core/dom/element.cc
+index 1234567..abcdefg 100644
+--- a/third_party/blink/renderer/core/dom/element.cc
++++ b/third_party/blink/renderer/core/dom/element.cc
+@@ -49,6 +49,7 @@
+ #include "third_party/blink/renderer/core/css/property_set_css_style_declaration.h"
+ #include "third_party/blink/renderer/core/css/resolved_style.h"
+ #include "third_party/blink/renderer/core/css/style_engine.h"
++#include "third_party/blink/renderer/core/fingerprint/fingerprint_generator.h"
+ 
+ namespace blink {
+ 
+@@ -1450,6 +1451,21 @@ DOMRect* Element::getBoundingClientRect() const {
+   // TODO(esprehn): The spec says this should happen before updating layout.
+   UpdateStyleAndLayoutForNodeIfNeeded(this, kUACallbacksAllowed);
+ 
++  DOMRect* rect = AdjustRectForAbsoluteZoom::AdjustRect(
++      GetDocument().View()->AncestorFrameVisibleRect(), GetDocument());
++
++  // VirtualBrowser: Apply ClientRects noise
++  if (FingerprintGenerator::IsEnabled()) {
++    uint32_t seed = FingerprintGenerator::GetSeed();
++    std::mt19937 rng(seed);
++    std::uniform_real_distribution<double> noise_dist(-0.5, 0.5);
++    
++    // Apply subtle noise to position values
++    rect->set_x(rect->x() + noise_dist(rng));
++    rect->set_y(rect->y() + noise_dist(rng));
++  }
++
++  return rect;
++}
++
+ DOMRectList* Element::getClientRects() const {
+   UpdateStyleAndLayoutForNodeIfNeeded(this, kUACallbacksAllowed);
+
+diff --git a/third_party/blink/renderer/core/dom/dom_rect.cc b/third_party/blink/renderer/core/dom/dom_rect.cc
+index 1234567..abcdefg 100644
+--- a/third_party/blink/renderer/core/dom/dom_rect.cc
++++ b/third_party/blink/renderer/core/dom/dom_rect.cc
+@@ -4,6 +4,7 @@
+ 
+ #include "third_party/blink/renderer/core/dom/dom_rect.h"
+ 
++#include "third_party/blink/renderer/core/fingerprint/fingerprint_generator.h"
+ #include "third_party/blink/renderer/core/geometry/dom_rect_read_only.h"
+ 
+ namespace blink {

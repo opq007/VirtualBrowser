@@ -10,7 +10,7 @@
         <p>
           <span class="item country">
             <span>(For reference only)</span>
-            <span>
+            <span v-if="geo.country_flag">
               <img :src="geo.country_flag" />
               {{ geo.country_name }}({{ geo.country_code2 }})
             </span>
@@ -18,13 +18,13 @@
             <span>{{ geo.city }}</span>
           </span>
         </p>
-        <p>
+        <p v-if="geo.time_zone">
           <span class="item">
             <span>
               <b>Time Zone:</b>
               {{ geo.time_zone.name }}
             </span>
-            <span>
+            <span v-if="geo.longitude && geo.latitude">
               <b>Coordinates:</b>
               {{ geo.longitude }}/{{ geo.latitude }}
             </span>
@@ -45,12 +45,17 @@
           <code>564142956</code>
         </p>
       </div>
-      <div v-if="!apiLinkIsValid" class="api-link-warning">
-        <h2>API链接未设置</h2>
-        <p>请在设置中配置API链接。</p>
+      <div v-if="!apiLinkIsValid && !ipGeoData" class="api-link-info">
+        <h2>本地模式运行中</h2>
+        <p>IP地理位置查询功能未启用。</p>
+        <p>如需启用，请在浏览器管理界面设置API链接。</p>
+        <p>
+          支持免费API如:
+          <a href="https://ip-api.com" target="_blank">ip-api.com</a>
+        </p>
       </div>
       <div class="network-error" v-if="networkErr">
-        <h1>未连接到互联网</h1>
+        <h1>网络连接错误</h1>
         <p>请检查您的网络或代理设置</p>
       </div>
       <div v-if="showLimitError" class="LimitError">
@@ -78,7 +83,6 @@ import FingerprintJS from '@fingerprintjs/fingerprintjs'
 import { onMounted, ref, computed } from 'vue'
 import formatHighlight from 'json-format-highlight'
 import { chromeSend, getGlobalData } from '@/utils/native.js'
-import { loadScript } from '@/utils/index.js'
 import random from 'random'
 
 const geo = ref({
@@ -96,64 +100,76 @@ const visitorId = ref('')
 const networkErr = ref(false)
 let apiLink = ref('')
 const showLimitError = ref(false)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ipGeoData = ref<any>(null)
 
 const apiLinkIsValid = computed(() => apiLink.value !== '')
 
 onMounted(async () => {
-  const store = await getGlobalData()
-  const storedApiLink = store.apiLink
-  if (storedApiLink) {
-    apiLink.value = storedApiLink
-  }
-  if (!apiLink.value) {
-    return
-  }
-  let req = await fetch(apiLink.value).catch(err => {
-    console.log(err)
-    networkErr.value = true
-  })
-  if (!req) {
-    return
+  // 获取指纹信息
+  try {
+    const fp = await FingerprintJS.load()
+    const result = await fp.get()
+    visitorId.value = result.visitorId
+    fingerprint.value = result.components
+  } catch (err) {
+    console.warn('FingerprintJS error:', err)
   }
 
-  const res = await req.json()
-  const apiResponse = res
-  if (
-    apiResponse.code === -13 ||
-    (apiResponse.msg && apiResponse.msg.includes('limit')) ||
-    (apiResponse.message && apiResponse.message.includes('limit'))
-  ) {
-    showLimitError.value = true
-    return
+  // 尝试获取全局数据和API配置
+  try {
+    const store = await getGlobalData()
+    const storedApiLink = store.apiLink
+    if (storedApiLink) {
+      apiLink.value = storedApiLink
+    }
+  } catch (err) {
+    console.warn('getGlobalData error:', err)
   }
-  geo.value = res
 
-  const ipGeo = {
-    'time-zone': {
-      zone: getZone(res.time_zone.offset_with_dst || 0),
-      locale: res.languages?.split(',')[0] || '',
-      utc: res.time_zone.name
-      // value: res.time_zone.offset,
-    },
-    location: {
-      longitude: parseFloat(res.longitude),
-      latitude: parseFloat(res.latitude),
-      precision: random.int(10, 5000)
-    },
-    'ua-language': {
-      // language: res.languages?.split(',')[0],
-      value: res.languages?.split(',')[0] || ''
+  // 如果配置了API链接，则尝试获取IP地理位置
+  if (apiLink.value) {
+    try {
+      let req = await fetch(apiLink.value)
+      if (req) {
+        const res = await req.json()
+        const apiResponse = res
+        if (
+          apiResponse.code === -13 ||
+          (apiResponse.msg && apiResponse.msg.includes('limit')) ||
+          (apiResponse.message && apiResponse.message.includes('limit'))
+        ) {
+          showLimitError.value = true
+          return
+        }
+        geo.value = res
+        ipGeoData.value = res
+
+        const ipGeo = {
+          'time-zone': {
+            zone: getZone(res.time_zone.offset_with_dst || res.time_zone?.offset || 0),
+            locale: res.languages?.split(',')[0] || '',
+            utc: res.time_zone.name
+          },
+          location: {
+            longitude: parseFloat(res.longitude),
+            latitude: parseFloat(res.latitude),
+            precision: random.int(10, 5000)
+          },
+          'ua-language': {
+            value: res.languages?.split(',')[0] || ''
+          }
+        }
+
+        await chromeSend('setIpGeo', ipGeo).catch((err: Error) => {
+          console.warn('setIpGeo error:', err)
+        })
+      }
+    } catch (err) {
+      console.log('API fetch error:', err)
+      networkErr.value = true
     }
   }
-
-  await chromeSend('setIpGeo', ipGeo).catch((err: Error) => {
-    console.warn(err)
-  })
-
-  const fp = await FingerprintJS.load()
-  const result = await fp.get()
-  visitorId.value = result.visitorId
-  fingerprint.value = result.components
 })
 
 const getZone = (offset: number) => {
@@ -230,6 +246,32 @@ const formatResult = (json: JSON) => {
             height: 31px;
             vertical-align: top;
           }
+        }
+      }
+    }
+
+    .api-link-info {
+      text-align: center;
+      padding: 20px;
+      background-color: #f5f7fa;
+      border-radius: 8px;
+      margin-bottom: 20px;
+
+      h2 {
+        color: #409eff;
+        margin-bottom: 10px;
+      }
+
+      p {
+        color: #606266;
+        margin: 8px 0;
+      }
+
+      a {
+        color: #409eff;
+        text-decoration: none;
+        &:hover {
+          text-decoration: underline;
         }
       }
     }

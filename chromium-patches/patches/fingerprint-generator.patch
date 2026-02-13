@@ -1,0 +1,454 @@
+From: VirtualBrowser Team <virtual.browser.2020@gmail.com>
+Subject: [PATCH] Fingerprint Generator Core
+---
+This patch adds the core FingerprintGenerator class that manages all fingerprint
+parameters and provides consistent random generation based on seed.
+
+diff --git a/third_party/blink/renderer/core/fingerprint/BUILD.gn b/third_party/blink/renderer/core/fingerprint/BUILD.gn
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/third_party/blink/renderer/core/fingerprint/BUILD.gn
+@@ -0,0 +1,15 @@
++# Copyright 2024 VirtualBrowser Team. All rights reserved.
++
++source_set("fingerprint") {
++  sources = [
++    "fingerprint_generator.cc",
++    "fingerprint_generator.h",
++  ]
++
++  deps = [
++    "//base",
++    "//third_party/blink/renderer/platform",
++    "//third_party/blink/renderer/platform/wtf",
++  ]
++
++  configs += [ "//third_party/blink/renderer:config" ]
++}
+
+diff --git a/third_party/blink/renderer/core/fingerprint/fingerprint_generator.h b/third_party/blink/renderer/core/fingerprint/fingerprint_generator.h
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/third_party/blink/renderer/core/fingerprint/fingerprint_generator.h
+@@ -0,0 +1,115 @@
++// Copyright 2024 VirtualBrowser Team. All rights reserved.
++// VirtualBrowser Fingerprint Generator
++
++#ifndef THIRD_PARTY_BLINK_RENDERER_CORE_FINGERPRINT_FINGERPRINT_GENERATOR_H_
++#define THIRD_PARTY_BLINK_RENDERER_CORE_FINGERPRINT_FINGERPRINT_GENERATOR_H_
++
++#include <cstdint>
++#include <random>
++#include <string>
++#include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
++#include "third_party/blink/renderer/platform/wtf/vector.h"
++
++namespace blink {
++
++// FingerprintGenerator manages fingerprint parameters for the browser profile.
++// It provides consistent random generation based on a seed value.
++class FingerprintGenerator {
++ public:
++  // Check if fingerprint modification is enabled
++  static bool IsEnabled();
++  
++  // Get the fingerprint seed
++  static uint32_t GetSeed();
++  
++  // Navigator properties
++  static String GetUserAgent();
++  static String GetPlatform();
++  static String GetVendor();
++  static String GetVendorSub();
++  static int GetHardwareConcurrency();
++  static float GetDeviceMemory();
++  static Vector<String> GetLanguages();
++  
++  // WebGL properties
++  static String GetGpuVendor();
++  static String GetGpuRenderer();
++  
++  // Screen properties
++  static int GetScreenWidth();
++  static int GetScreenHeight();
++  static int GetColorDepth();
++  static int GetPixelDepth();
++  
++  // Timezone
++  static String GetTimezone();
++  static int GetTimezoneOffset();
++  
++  // WebRTC mode: 0=Replace, 1=Allow, 2=Block
++  static int GetWebRTCMode();
++  
++  // Location
++  static double GetLatitude();
++  static double GetLongitude();
++  static double GetLocationAccuracy();
++  
++  // Fonts
++  static Vector<String> GetFonts();
++  
++  // Device name
++  static String GetDeviceName();
++  
++  // MAC address (for WebRTC)
++  static String GetMacAddress();
++  
++  // Do Not Track
++  static bool GetDoNotTrack();
++  
++  // Generate consistent random value from seed
++  static uint32_t RandomFromSeed(uint32_t min_val, uint32_t max_val);
++  
++  // Parse command line arguments
++  static void InitializeFromCommandLine();
++
++ private:
++  FingerprintGenerator() = delete;
++  
++  static bool enabled_;
++  static uint32_t seed_;
++  static String user_agent_;
++  static String platform_;
++  static String vendor_;
++  static int hardware_concurrency_;
++  static float device_memory_;
++  static Vector<String> languages_;
++  static String gpu_vendor_;
++  static String gpu_renderer_;
++  static int screen_width_;
++  static int screen_height_;
++  static int color_depth_;
++  static String timezone_;
++  static int webrtc_mode_;
++  static double latitude_;
++  static double longitude_;
++  static String device_name_;
++  static String mac_address_;
++  static bool dnt_;
++};
++
++}  // namespace blink
++
++#endif  // THIRD_PARTY_BLINK_RENDERER_CORE_FINGERPRINT_FINGERPRINT_GENERATOR_H_
+
+diff --git a/third_party/blink/renderer/core/fingerprint/fingerprint_generator.cc b/third_party/blink/renderer/core/fingerprint/fingerprint_generator.cc
+new file mode 100644
+index 0000000..1234567
+--- /dev/null
++++ b/third_party/blink/renderer/core/fingerprint/fingerprint_generator.cc
+@@ -0,0 +1,250 @@
++// Copyright 2024 VirtualBrowser Team. All rights reserved.
++// VirtualBrowser Fingerprint Generator Implementation
++
++#include "third_party/blink/renderer/core/fingerprint/fingerprint_generator.h"
++
++#include <random>
++#include <algorithm>
++#include "base/command_line.h"
++#include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
++
++namespace blink {
++
++// Static member initialization
++bool FingerprintGenerator::enabled_ = false;
++uint32_t FingerprintGenerator::seed_ = 0;
++String FingerprintGenerator::user_agent_;
++String FingerprintGenerator::platform_;
++String FingerprintGenerator::vendor_ = "Google Inc.";
++int FingerprintGenerator::hardware_concurrency_ = 0;
++float FingerprintGenerator::device_memory_ = 0;
++Vector<String> FingerprintGenerator::languages_;
++String FingerprintGenerator::gpu_vendor_;
++String FingerprintGenerator::gpu_renderer_;
++int FingerprintGenerator::screen_width_ = 0;
++int FingerprintGenerator::screen_height_ = 0;
++int FingerprintGenerator::color_depth_ = 24;
++String FingerprintGenerator::timezone_;
++int FingerprintGenerator::webrtc_mode_ = 0;  // 0=Replace, 1=Allow, 2=Block
++double FingerprintGenerator::latitude_ = 0;
++double FingerprintGenerator::longitude_ = 0;
++String FingerprintGenerator::device_name_;
++String FingerprintGenerator::mac_address_;
++bool FingerprintGenerator::dnt_ = false;
++
++// Platform configurations
++static const char* kWindowsPlatforms[] = {
++  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
++  "Win32",
++};
++
++static const char* kMacPlatforms[] = {
++  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
++  "MacIntel",
++};
++
++static const char* kLinuxPlatforms[] = {
++  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36",
++  "Linux x86_64",
++};
++
++// GPU configurations
++static const char* kGpuVendors[] = {
++  "Intel Inc.",
++  "NVIDIA Corporation",
++  "AMD",
++  "Apple",
++};
++
++static const char* kIntelRenderers[] = {
++  "Intel Iris OpenGL Engine",
++  "Intel(R) UHD Graphics 630",
++  "Intel(R) Iris(R) Xe Graphics",
++  "Mesa Intel(R) HD Graphics 630",
++};
++
++static const char* kNvidiaRenderers[] = {
++  "NVIDIA GeForce GTX 1060",
++  "NVIDIA GeForce GTX 1660 SUPER",
++  "NVIDIA GeForce RTX 2060",
++  "NVIDIA GeForce RTX 3070",
++  "NVIDIA GeForce RTX 4070",
++};
++
++static const char* kAmdRenderers[] = {
++  "AMD Radeon RX 580",
++  "AMD Radeon RX 5700 XT",
++  "AMD Radeon RX 6700 XT",
++  "AMD Radeon RX 7800 XT",
++};
++
++bool FingerprintGenerator::IsEnabled() {
++  return enabled_;
++}
++
++uint32_t FingerprintGenerator::GetSeed() {
++  return seed_;
++}
++
++String FingerprintGenerator::GetUserAgent() {
++  return user_agent_;
++}
++
++String FingerprintGenerator::GetPlatform() {
++  return platform_;
++}
++
++String FingerprintGenerator::GetVendor() {
++  return vendor_;
++}
++
++String FingerprintGenerator::GetVendorSub() {
++  return "";
++}
++
++int FingerprintGenerator::GetHardwareConcurrency() {
++  if (hardware_concurrency_ > 0) {
++    return hardware_concurrency_;
++  }
++  // Generate from seed if not specified
++  return static_cast<int>(RandomFromSeed(2, 16));
++}
++
++float FingerprintGenerator::GetDeviceMemory() {
++  if (device_memory_ > 0) {
++    return device_memory_;
++  }
++  // Common memory values: 4, 8, 16, 32
++  float mem_values[] = {4.0f, 8.0f, 8.0f, 16.0f, 16.0f, 32.0f};
++  return mem_values[RandomFromSeed(0, 5)];
++}
++
++Vector<String> FingerprintGenerator::GetLanguages() {
++  if (!languages_.IsEmpty()) {
++    return languages_;
++  }
++  Vector<String> default_lang;
++  default_lang.push_back("en-US");
++  default_lang.push_back("en");
++  return default_lang;
++}
++
++String FingerprintGenerator::GetGpuVendor() {
++  if (!gpu_vendor_.IsEmpty()) {
++    return gpu_vendor_;
++  }
++  return kGpuVendors[RandomFromSeed(0, 3)];
++}
++
++String FingerprintGenerator::GetGpuRenderer() {
++  if (!gpu_renderer_.IsEmpty()) {
++    return gpu_renderer_;
++  }
++  
++  // Generate based on vendor
++  String vendor = GetGpuVendor();
++  if (vendor.Contains("Intel")) {
++    return kIntelRenderers[RandomFromSeed(0, 3)];
++  } else if (vendor.Contains("NVIDIA")) {
++    return kNvidiaRenderers[RandomFromSeed(0, 4)];
++  } else if (vendor.Contains("AMD")) {
++    return kAmdRenderers[RandomFromSeed(0, 3)];
++  }
++  return "Unknown GPU";
++}
++
++int FingerprintGenerator::GetScreenWidth() {
++  if (screen_width_ > 0) {
++    return screen_width_;
++  }
++  // Common screen widths
++  int widths[] = {1366, 1920, 2560, 3840};
++  return widths[RandomFromSeed(0, 3)];
++}
++
++int FingerprintGenerator::GetScreenHeight() {
++  if (screen_height_ > 0) {
++    return screen_height_;
++  }
++  // Common screen heights matching widths
++  int heights[] = {768, 1080, 1440, 2160};
++  return heights[RandomFromSeed(0, 3)];
++}
++
++int FingerprintGenerator::GetColorDepth() {
++  return color_depth_;
++}
++
++int FingerprintGenerator::GetPixelDepth() {
++  return color_depth_;
++}
++
++String FingerprintGenerator::GetTimezone() {
++  if (!timezone_.IsEmpty()) {
++    return timezone_;
++  }
++  return "UTC";
++}
++
++int FingerprintGenerator::GetTimezoneOffset() {
++  // Common timezone offsets in minutes
++  int offsets[] = {-480, -420, -360, -300, -240, 0, 60, 120, 180, 240, 480};
++  return offsets[RandomFromSeed(0, 10)];
++}
++
++int FingerprintGenerator::GetWebRTCMode() {
++  return webrtc_mode_;
++}
++
++double FingerprintGenerator::GetLatitude() {
++  return latitude_;
++}
++
++double FingerprintGenerator::GetLongitude() {
++  return longitude_;
++}
++
++double FingerprintGenerator::GetLocationAccuracy() {
++  return 100.0 + RandomFromSeed(0, 1000);
++}
++
++Vector<String> FingerprintGenerator::GetFonts() {
++  Vector<String> fonts;
++  // Return common fonts based on platform
++  fonts.push_back("Arial");
++  fonts.push_back("Helvetica");
++  fonts.push_back("Times New Roman");
++  fonts.push_back("Courier New");
++  return fonts;
++}
++
++String FingerprintGenerator::GetDeviceName() {
++  if (!device_name_.IsEmpty()) {
++    return device_name_;
++  }
++  return "Desktop";
++}
++
++String FingerprintGenerator::GetMacAddress() {
++  if (!mac_address_.IsEmpty()) {
++    return mac_address_;
++  }
++  // Generate random MAC address from seed
++  std::mt19937 rng(seed_);
++  std::uniform_int_distribution<int> dist(0, 255);
++  
++  char mac[18];
++  snprintf(mac, sizeof(mac), "%02X:%02X:%02X:%02X:%02X:%02X",
++           dist(rng), dist(rng), dist(rng), dist(rng), dist(rng), dist(rng));
++  return String(mac);
++}
++
++bool FingerprintGenerator::GetDoNotTrack() {
++  return dnt_;
++}
++
++uint32_t FingerprintGenerator::RandomFromSeed(uint32_t min_val, uint32_t max_val) {
++  std::mt19937 rng(seed_);
++  std::uniform_int_distribution<uint32_t> dist(min_val, max_val);
++  return dist(rng);
++}
++
++void FingerprintGenerator::InitializeFromCommandLine() {
++  base::CommandLine* cmd_line = base::CommandLine::ForCurrentProcess();
++  
++  if (cmd_line->HasSwitch("fingerprint")) {
++    std::string seed_str = cmd_line->GetSwitchValueASCII("fingerprint");
++    seed_ = static_cast<uint32_t>(std::stoul(seed_str));
++    enabled_ = true;
++  }
++  
++  if (cmd_line->HasSwitch("fingerprint-platform")) {
++    platform_ = String::FromUTF8(cmd_line->GetSwitchValueASCII("fingerprint-platform"));
++    // Set appropriate user agent based on platform
++    if (platform_ == "windows") {
++      platform_ = kWindowsPlatforms[1];
++      user_agent_ = kWindowsPlatforms[0];
++    } else if (platform_ == "macos") {
++      platform_ = kMacPlatforms[1];
++      user_agent_ = kMacPlatforms[0];
++    } else if (platform_ == "linux") {
++      platform_ = kLinuxPlatforms[1];
++      user_agent_ = kLinuxPlatforms[0];
++    }
++  }
++  
++  if (cmd_line->HasSwitch("fingerprint-gpu-vendor")) {
++    gpu_vendor_ = String::FromUTF8(cmd_line->GetSwitchValueASCII("fingerprint-gpu-vendor"));
++  }
++  
++  if (cmd_line->HasSwitch("fingerprint-gpu-renderer")) {
++    gpu_renderer_ = String::FromUTF8(cmd_line->GetSwitchValueASCII("fingerprint-gpu-renderer"));
++  }
++  
++  if (cmd_line->HasSwitch("fingerprint-hardware-concurrency")) {
++    hardware_concurrency_ = std::stoi(cmd_line->GetSwitchValueASCII("fingerprint-hardware-concurrency"));
++  }
++  
++  if (cmd_line->HasSwitch("timezone")) {
++    timezone_ = String::FromUTF8(cmd_line->GetSwitchValueASCII("timezone"));
++  }
++  
++  if (cmd_line->HasSwitch("lang")) {
++    languages_.clear();
++    languages_.push_back(String::FromUTF8(cmd_line->GetSwitchValueASCII("lang")));
++  }
++}
++
++}  // namespace blink
+
+diff --git a/third_party/blink/renderer/core/BUILD.gn b/third_party/blink/renderer/core/BUILD.gn
+index 1234567..abcdefg 100644
+--- a/third_party/blink/renderer/core/BUILD.gn
++++ b/third_party/blink/renderer/core/BUILD.gn
+@@ -100,6 +100,7 @@ jumbo_source_set("core") {
+     ":execution_context",
+     ":exported",
+     ":fileapi",
++    ":fingerprint",
+     ":frame",
+     ":geometry",
+     ":html",

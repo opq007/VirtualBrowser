@@ -1,0 +1,62 @@
+From: VirtualBrowser Team <virtual.browser.2020@gmail.com>
+Subject: [PATCH] Canvas Fingerprint Spoofing
+---
+This patch modifies Canvas 2D rendering to add consistent noise based on
+fingerprint seed, preventing canvas fingerprinting tracking.
+
+diff --git a/third_party/blink/renderer/modules/canvas/canvas2d/canvas_rendering_context_2d.cc b/third_party/blink/renderer/modules/canvas/canvas2d/canvas_rendering_context_2d.cc
+index 1234567..abcdefg 100644
+--- a/third_party/blink/renderer/modules/canvas/canvas2d/canvas_rendering_context_2d.cc
++++ b/third_party/blink/renderer/modules/canvas/canvas2d/canvas_rendering_context_2d.cc
+@@ -30,6 +30,8 @@
+ #include "third_party/blink/renderer/modules/canvas/canvas2d/canvas_rendering_context_2d.h"
+ 
+ #include <math.h>
++#include <random>
++#include "third_party/blink/renderer/core/fingerprint/fingerprint_generator.h"
+ 
+ #include "base/bind.h"
+ #include "base/compiler_specific.h"
+@@ -1500,6 +1502,32 @@ ImageData* CanvasRenderingContext2D::getImageData(
+     int sw, int sh,
+     ExceptionState& exception_state) {
+ 
++  // VirtualBrowser: Apply fingerprint noise to image data
++  if (FingerprintGenerator::IsEnabled()) {
++    uint32_t seed = FingerprintGenerator::GetSeed();
++    std::mt19937 rng(seed);
++    
++    // Generate consistent noise based on fingerprint seed
++    std::uniform_int_distribution<int> noise_dist(-3, 3);
++    std::uniform_int_distribution<int> pos_dist(0, buffer_length - 1);
++    
++    // Apply subtle noise to a small percentage of pixels
++    int noise_pixels = buffer_length / 1000; // 0.1% of pixels
++    for (int i = 0; i < noise_pixels; ++i) {
++      int pos = pos_dist(rng);
++      // Only modify RGB channels, not Alpha
++      int channel = pos % 4;
++      if (channel != 3) {
++        int noise = noise_dist(rng);
++        uint8_t* pixel = data->Data() + pos;
++        int new_value = static_cast<int>(*pixel) + noise;
++        *pixel = static_cast<uint8_t>(std::max(0, std::min(255, new_value)));
++      }
++    }
++  }
++
+   return MakeGarbageCollected<ImageData>(sw, sh, data, settings);
+ }
+ 
+diff --git a/third_party/blink/renderer/modules/canvas/canvas2d/canvas_rendering_context_2d.h b/third_party/blink/renderer/modules/canvas/canvas2d/canvas_rendering_context_2d.h
+index 1234567..abcdefg 100644
+--- a/third_party/blink/renderer/modules/canvas/canvas2d/canvas_rendering_context_2d.h
++++ b/third_party/blink/renderer/modules/canvas/canvas2d/canvas_rendering_context_2d.h
+@@ -32,6 +32,7 @@
+ #include "third_party/blink/renderer/bindings/modules/v8/v8_union_predefined_color_space_string.h"
+ #include "third_party/blink/renderer/core/execution_context/execution_context_lifecycle_state_observer.h"
+ #include "third_party/blink/renderer/core/html/canvas/canvas_context_creation_attributes_core.h"
++#include "third_party/blink/renderer/core/fingerprint/fingerprint_generator.h"
+ #include "third_party/blink/renderer/modules/canvas/canvas2d/base_rendering_context_2d.h"
+ #include "third_party/blink/renderer/modules/modules_export.h"
+ #include "third_party/blink/renderer/platform/graphics/canvas_resource_provider.h"
