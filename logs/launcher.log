@@ -1,0 +1,244 @@
+
+╔═══════════════════════════════════════════════════════════════╗
+║           VirtualBrowser Launcher                             ║
+║           for fingerprint-chromium (ungoogled-chromium)       ║
+╠═══════════════════════════════════════════════════════════════╣
+║  Chromium Path: C:\fingerprint-chromium\chrome.exe             ║
+║  Data Dir:      C:\Users\zhong/.virtualbrowser/profiles        ║
+║  Port:          9528                                           ║
+╚═══════════════════════════════════════════════════════════════╝
+    
+启动服务: http://localhost:9528
+按 Ctrl+C 停止服务
+
+ * Serving Flask app 'launcher'
+ * Debug mode: on
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:9528
+ * Running on http://192.168.2.102:9528
+Press CTRL+C to quit
+ * Restarting with watchdog (windowsapi)
+ * Debugger is active!
+ * Debugger PIN: 638-708-611
+127.0.0.1 - - [21/Mar/2026 19:44:20] "OPTIONS /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [21/Mar/2026 19:44:21] "GET /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [21/Mar/2026 19:44:25] "OPTIONS /api/launch HTTP/1.1" 200 -
+127.0.0.1 - - [21/Mar/2026 19:44:26] "POST /api/launch HTTP/1.1" 200 -
+127.0.0.1 - - [21/Mar/2026 19:44:26] "OPTIONS /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [21/Mar/2026 19:44:26] "GET /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [21/Mar/2026 19:44:27] "POST /api/launch HTTP/1.1" 200 -
+127.0.0.1 - - [21/Mar/2026 19:44:28] "GET /api/running HTTP/1.1" 200 -
+
+╔═══════════════════════════════════════════════════════════════╗
+║           VirtualBrowser Launcher                             ║
+║           for fingerprint-chromium (ungoogled-chromium)       ║
+╠═══════════════════════════════════════════════════════════════╣
+║  Chromium Path: C:\fingerprint-chromium\chrome.exe             ║
+║  Data Dir:      C:\Users\zhong/.virtualbrowser/profiles        ║
+║  Port:          9528                                           ║
+╚═══════════════════════════════════════════════════════════════╝
+    
+启动服务: http://localhost:9528
+按 Ctrl+C 停止服务
+
+[DEBUG] 接收到的配置数据: {
+  "id": 1,
+  "name": "test1",
+  "group": "\u9ed8\u8ba4\u5206\u7ec4",
+  "os": "Win 11",
+  "chrome_version": "\u9ed8\u8ba4",
+  "proxy": {
+    "mode": 2,
+    "value": "",
+    "protocol": "SOCKS5",
+    "host": "proxy.love-ai.dpdns.org",
+    "port": "52800",
+    "user": "opq",
+    "pass": "opqi777",
+    "API": "",
+    "url": "socks5://opq:opqi777@proxy.love-ai.dpdns.org:52800"
+  },
+  "cookie": {
+    "mode": 0,
+    "value": ""
+  },
+  "homepage": {
+    "mode": 0,
+    "value": ""
+  },
+  "ua": {
+    "mode": 0,
+    "value": "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
+  },
+  "ua-full-version": {
+    "mode": 1,
+    "value": "134.0.0.0"
+  },
+  "sec-ch-ua": {
+    "mode": 0,
+    "value": [
+      {
+        "brand": "Chromium",
+        "version": 134
+      },
+      {
+        "brand": "Not=A?Brand",
+        "version": "99"
+      }
+    ]
+  },
+  "ua-language": {
+    "mode": 2,
+    "language": "",
+    "value": ","
+  },
+  "time-zone": {
+    "mode": 2,
+    "zone": "UTC+8:00",
+    "utc": "Asia/Hong_Kong",
+    "locale": "",
+    "name": "(UTC+08:00) Beijing, Chongqing, Hong Kong, Urumqi",
+    "value": 8
+  },
+  "webrtc": {
+    "mode": 0
+  },
+  "location": {
+    "mode": 2,
+    "enable": 1,
+    "precision": 4560
+  },
+  "screen": {
+    "mode": 0,
+    "width": 1536,
+    "height": 864,
+    "_value": "1536 x 864"
+  },
+  "fonts": {
+    "mode": 1,
+    "value": [
+      "Yu Gothic Medium",
+      "Rockwell",
+      "Symbol Regular",
+      "Sylfaen Regular",
+      "Gabriola Regular",
+      "Yu Gothic UI Semibold",
+      "STSong",
+      "Tahoma",
+      "Franklin Gothic Medium"
+    ]
+  },
+  "canvas": {
+    "mode": 1,
+    "r": -1,
+    "g": 10,
+    "b": 2,
+    "a": 9
+  },
+  "webgl-img": {
+    "mode": 1,
+    "r": -2,
+    "g": -2,
+    "b": 6,
+    "a": 0
+  },
+  "webgl": {
+    "mode": 1,
+    "vendor": "Google Inc. (AMD)",
+    "render": "ANGLE (AMD, AMD Radeon HD 7700 Series Direct3D9Ex vs_3_0 ps_3_0)"
+  },
+  "audio-context": {
+    "mode": 1,
+    "channel": 9.542103414261926e-08,
+    "analyer": 0.03558800645447118
+  },
+  "media": {
+    "mode": 1
+  },
+  "client-rects": {
+    "mode": 1,
+    "width": -0.4879284064880123,
+    "height": -0.9186768373702696
+  },
+  "speech_voices": {
+    "mode": 1,
+    "value": [
+      {
+        "default": true,
+        "lang": "zh-CN",
+        "localService": true,
+        "name": "Microsoft Huihui - Chinese (Simplified, PRC)",
+        "voiceURI": "Microsoft Huihui - Chinese (Simplified, PRC)"
+      },
+      {
+        "default": false,
+        "lang": "id-ID",
+        "localService": false,
+        "name": "Google Bahasa Indonesia",
+        "voiceURI": "Google Bahasa Indonesia"
+      },
+      {
+        "default": false,
+        "lang": "zh-CN",
+        "localService": true,
+        "name": "Microsoft Yaoyao - Chinese (Simplified, PRC)",
+        "voiceURI": "Microsoft Yaoyao - Chinese (Simplified, PRC)"
+      }
+    ]
+  },
+  "ssl": {
+    "mode": 0,
+    "value": []
+  },
+  "cpu": {
+    "mode": 1,
+    "value": 4
+  },
+  "memory": {
+    "mode": 1,
+    "value": 8
+  },
+  "device-name": {
+    "mode": 1,
+    "value": "DESKTOP-81246841"
+  },
+  "mac": {
+    "mode": 1,
+    "value": "22-DD-54-79-B9-B2"
+  },
+  "dnt": {
+    "mode": 1,
+    "value": 1
+  },
+  "port-scan": {
+    "mode": 1,
+    "value": []
+  },
+  "gpu": {
+    "mode": 1,
+    "value": 1
+  },
+  "timestamp": 1771857689867,
+  "isRunning": false,
+  "runLoading": false,
+  "status": "running"
+}
+[DEBUG] 转换后的代理配置: mode=2, protocol=SOCKS5, host=proxy.love-ai.dpdns.org, port=52800, user=opq, pass=***
+[DEBUG] 代理配置: mode=2, host=proxy.love-ai.dpdns.org, port=52800
+[PROXY] 检测到代理认证，启动本地代理转发服务
+[PROXY] 本地代理转发服务已启动: 127.0.0.1:55078 -> socks5://proxy.love-ai.dpdns.org:52800
+[PROXY] 浏览器将连接本地代理: http://127.0.0.1:55078
+启动浏览器: C:\fingerprint-chromium\chrome.exe --user-data-dir=C:\Users\zhong/.virtualbrowser/profiles\1 --fingerprint=2476189158 --fingerprint-platform=windows --fingerprint-gpu-vendor=Google Inc. (AMD) --fingerprint-gpu-renderer=ANGLE (AMD, AMD Radeon HD 7700 Series Direct3D9Ex vs_3_0 ps_3_0) --fingerprint-hardware-concurrency=4 --timezone=Asia/Hong_Kong --proxy-server=http://127.0.0.1:55078 --disable-non-proxied-udp --remote-debugging-port=9300 about:blank
+127.0.0.1 - - [21/Mar/2026 19:44:29] "POST /api/launch HTTP/1.1" 200 -
+127.0.0.1 - - [21/Mar/2026 19:44:30] "GET /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [21/Mar/2026 19:44:38] "OPTIONS /api/stop/1 HTTP/1.1" 200 -
+127.0.0.1 - - [21/Mar/2026 19:44:38] "OPTIONS /api/stop/2 HTTP/1.1" 200 -
+127.0.0.1 - - [21/Mar/2026 19:44:38] "OPTIONS /api/stop/3 HTTP/1.1" 200 -
+127.0.0.1 - - [21/Mar/2026 19:44:39] "POST /api/stop/1 HTTP/1.1" 200 -
+127.0.0.1 - - [21/Mar/2026 19:44:39] "POST /api/stop/2 HTTP/1.1" 200 -
+127.0.0.1 - - [21/Mar/2026 19:44:39] "OPTIONS /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [21/Mar/2026 19:44:39] "POST /api/stop/3 HTTP/1.1" 200 -
+127.0.0.1 - - [21/Mar/2026 19:44:39] "GET /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [21/Mar/2026 19:44:40] "GET /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [21/Mar/2026 19:44:40] "GET /api/running HTTP/1.1" 200 -
