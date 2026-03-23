@@ -83,7 +83,7 @@ import FingerprintJS from '@fingerprintjs/fingerprintjs'
 import { onMounted, ref, computed } from 'vue'
 import formatHighlight from 'json-format-highlight'
 import { chromeSend, getGlobalData } from '@/utils/native.js'
-import random from 'random'
+import { fetchIpGeoData, generateBrowserConfig, formatTimezone } from '@/utils/ipApiAdapter.js'
 
 const geo = ref({
   ip: '',
@@ -130,56 +130,39 @@ onMounted(async () => {
   // 如果配置了API链接，则尝试获取IP地理位置
   if (apiLink.value) {
     try {
-      let req = await fetch(apiLink.value)
-      if (req) {
-        const res = await req.json()
-        const apiResponse = res
+      // 使用适配器获取并标准化 IP 地理位置数据
+      const normalizedData = await fetchIpGeoData(apiLink.value)
+
+      // 检查是否超出限制（某些 API 的错误码）
+      if (normalizedData._raw) {
+        const raw = normalizedData._raw
         if (
-          apiResponse.code === -13 ||
-          (apiResponse.msg && apiResponse.msg.includes('limit')) ||
-          (apiResponse.message && apiResponse.message.includes('limit'))
+          raw.code === -13 ||
+          raw.status === 'error' ||
+          (raw.msg && raw.msg.includes('limit')) ||
+          (raw.message && raw.message.includes('limit'))
         ) {
           showLimitError.value = true
           return
         }
-        geo.value = res
-        ipGeoData.value = res
-
-        const ipGeo = {
-          'time-zone': {
-            zone: getZone(res.time_zone.offset_with_dst || res.time_zone?.offset || 0),
-            locale: res.languages?.split(',')[0] || '',
-            utc: res.time_zone.name
-          },
-          location: {
-            longitude: parseFloat(res.longitude),
-            latitude: parseFloat(res.latitude),
-            precision: random.int(10, 5000)
-          },
-          'ua-language': {
-            value: res.languages?.split(',')[0] || ''
-          }
-        }
-
-        await chromeSend('setIpGeo', ipGeo).catch((err: Error) => {
-          console.warn('setIpGeo error:', err)
-        })
       }
+
+      // 更新显示数据
+      geo.value = normalizedData
+      ipGeoData.value = normalizedData
+
+      // 生成浏览器配置
+      const ipGeo = generateBrowserConfig(normalizedData)
+
+      await chromeSend('setIpGeo', ipGeo).catch((err: Error) => {
+        console.warn('setIpGeo error:', err)
+      })
     } catch (err) {
       console.log('API fetch error:', err)
       networkErr.value = true
     }
   }
 })
-
-const getZone = (offset: number) => {
-  const sign = offset > 0 ? '+' : '-'
-  const hours = Math.floor(Math.abs(offset))
-  const decimal = Math.abs(offset) - hours
-  const minutes = Math.round(decimal * 60)
-  const paddedMinutes = minutes < 10 ? '0' + minutes : minutes.toString()
-  return `UTC${sign}${hours}:${paddedMinutes}`
-}
 
 const formatResult = (json: JSON) => {
   let colorJson = formatHighlight(json)

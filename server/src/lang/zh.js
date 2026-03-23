@@ -44,6 +44,7 @@ export default {
     add: '创建浏览器',
     batchActions: '批量操作',
     batchStart: '批量启动',
+    batchStop: '批量停止',
     batchCreate: '批量创建',
     batchDelete: '批量删除',
     batchGroup: '批量分组',
@@ -62,6 +63,8 @@ export default {
     launch: '启动',
     launching: '启动中',
     launched: '已启动',
+    stop: '停止',
+    stopping: '停止中',
     edit: '编辑',
     delete: '删除',
     basic: '基础设置',
@@ -149,7 +152,15 @@ export default {
     success: '成功',
     create: '创建',
     update: '更新',
-    delete_confirm: '确定删除 ${name} 吗？'
+    delete_confirm: '确定删除 ${name} 吗？',
+    status: '状态',
+    running: '运行中',
+    stopped: '已停止',
+    debug_port: '调试端口',
+    remark: '备注',
+    name_prefix: '名称前缀',
+    remark_prefix: '备注前缀',
+    start_number: '起始序号'
   },
   group: {
     add: '添加分组',

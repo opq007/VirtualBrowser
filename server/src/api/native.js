@@ -33,7 +33,21 @@ async function launcherFetch(endpoint, options = {}) {
         ...options.headers
       }
     })
-    return await response.json()
+
+    // 检查 HTTP 响应状态
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`)
+    }
+
+    const data = await response.json()
+
+    // 检查 API 返回的错误
+    if (data.error) {
+      throw new Error(data.error)
+    }
+
+    return data
   } catch (err) {
     console.error('[Launcher API Error]:', err)
     throw err
@@ -103,6 +117,10 @@ export async function chromeSendTimeout(name, timeout = 2000, ...params) {
         throw new Error('Browser config not found: ' + browserId)
       }
       
+      // 打印完整的配置信息用于调试
+      console.log('[DEBUG] 启动浏览器配置:', JSON.stringify(config, null, 2))
+      console.log('[DEBUG] 代理配置:', JSON.stringify(config.proxy, null, 2))
+      
       const result = await launcherFetch('/api/launch', {
         method: 'POST',
         body: JSON.stringify(config)
@@ -134,6 +152,12 @@ export async function chromeSendTimeout(name, timeout = 2000, ...params) {
         // 忽略停止错误
       }
       return { data: 'ok' }
+    }
+
+    case 'stopBrowser': {
+      const browserId = params[0]
+      const result = await launcherFetch(`/api/stop/${browserId}`, { method: 'POST' })
+      return { data: result }
     }
 
     case 'getGlobalData': {

@@ -41,6 +41,7 @@ export default {
     add: 'Create Browser',
     batchActions: 'Batch Actions',
     batchStart: 'Batch start',
+    batchStop: 'Batch Stop',
     batchCreate: 'Batch Create',
     batchDelete: 'Batch Delete',
     batchGroup: 'Batch Group',
@@ -58,6 +59,8 @@ export default {
     launch: 'Launch',
     launching: 'Launching',
     launched: 'Launched',
+    stop: 'Stop',
+    stopping: 'Stopping',
     edit: 'Edit',
     delete: 'Delete',
     basic: 'Basic',
@@ -147,7 +150,15 @@ export default {
     success: 'Success',
     create: 'Create',
     update: 'Update',
-    delete_confirm: 'Are you sure to delete ${name} ?'
+    delete_confirm: 'Are you sure to delete ${name} ?',
+    status: 'Status',
+    running: 'Running',
+    stopped: 'Stopped',
+    debug_port: 'Debug Port',
+    remark: 'Remark',
+    name_prefix: 'Name Prefix',
+    remark_prefix: 'Remark Prefix',
+    start_number: 'Start Number'
   },
   group: {
     add: 'Create Group',

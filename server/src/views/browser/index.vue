@@ -19,6 +19,9 @@
             <el-dropdown-item @click.native="handleBatchStart">
               {{ $t('browser.batchStart') }}
             </el-dropdown-item>
+            <el-dropdown-item @click.native="handleBatchStop">
+              {{ $t('browser.batchStop') }}
+            </el-dropdown-item>
             <el-dropdown-item @click.native="() => (dialogVisible = true)">
               {{ $t('browser.batchCreate') }}
             </el-dropdown-item>
@@ -112,6 +115,24 @@
           </span>
         </template>
       </el-table-column>
+      <el-table-column :label="$t('browser.status')" width="100" align="center">
+        <template slot-scope="{ row }">
+          <el-tag v-if="row.isRunning" type="success" size="small" effect="dark">
+            {{ $t('browser.running') }}
+          </el-tag>
+          <el-tag v-else type="info" size="small" effect="plain">
+            {{ $t('browser.stopped') }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column :label="$t('browser.debug_port')" width="110" align="center">
+        <template slot-scope="{ row }">
+          <span v-if="row.isRunning && row.debug_port" style="color: #67C23A; font-weight: bold;">
+            {{ row.debug_port }}
+          </span>
+          <span v-else style="color: #909399;">-</span>
+        </template>
+      </el-table-column>
       <el-table-column
         :label="$t('browser.date')"
         sortable
@@ -124,24 +145,25 @@
         </template>
       </el-table-column>
 
-      <el-table-column :label="$t('browser.launch')" class-name="status-col" width="120">
+      <el-table-column :label="$t('browser.launch')" class-name="status-col" width="150">
         <template slot-scope="{ row }">
           <el-button
+            v-if="!row.isRunning"
             type="primary"
             icon="el-icon-video-play"
             :loading="row.runLoading"
-            :disabled="row.isRunning"
             @click="handleLaunch(row)"
           >
-            {{
-              $t(
-                row.runLoading
-                  ? 'browser.launching'
-                  : row.isRunning
-                  ? 'browser.launched'
-                  : 'browser.launch'
-              )
-            }}
+            {{ $t(row.runLoading ? 'browser.launching' : 'browser.launch') }}
+          </el-button>
+          <el-button
+            v-else
+            type="danger"
+            icon="el-icon-video-pause"
+            :loading="row.stopLoading"
+            @click="handleStop(row)"
+          >
+            {{ $t(row.stopLoading ? 'browser.stopping' : 'browser.stop') }}
           </el-button>
         </template>
       </el-table-column>
@@ -165,14 +187,6 @@
         </template>
       </el-table-column>
     </el-table>
-
-    <div class="qq-group">
-      <img src="@/assets/VirtualBrowser-qq-group.png" />
-      <p>
-        QQ Group:
-        <code>564142956</code>
-      </p>
-    </div>
 
     <el-drawer
       :title="$t(dialogStatus == 'create' ? 'browser.add' : 'browser.edit')"
@@ -674,9 +688,29 @@
       </span>
     </el-dialog>
     <el-dialog :visible.sync="dialogVisible" title="批量创建">
-      <el-form :model="form">
+      <el-form :model="form" label-width="120px">
         <el-form-item label="环境数量">
           <el-input v-model.number="form.numberOfEnvironments" type="number" min="1" />
+        </el-form-item>
+        <el-form-item label="名称前缀">
+          <el-input
+            v-model="form.namePrefix"
+            placeholder="例如：测试环境"
+            style="width: 300px"
+          />
+          <span style="margin-left: 10px; color: #909399; font-size: 12px">
+            最终名称格式：前缀 + 序号（例如：测试环境 1）
+          </span>
+        </el-form-item>
+        <el-form-item label="备注前缀">
+          <el-input
+            v-model="form.remarkPrefix"
+            placeholder="例如：用于自动化测试"
+            style="width: 300px"
+          />
+        </el-form-item>
+        <el-form-item label="起始序号">
+          <el-input-number v-model="form.startNumber" :min="1" />
         </el-form-item>
         <el-form-item label="代理类型">
           <el-select v-model="form.proxyType" placeholder="请选择">
@@ -688,7 +722,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="代理API链接">
-          <el-input v-model="form.proxyAPI" placeholder="请输入" />
+          <el-input v-model="form.proxyAPI" placeholder="自动从API提取不同代理" />
         </el-form-item>
       </el-form>
       <div slot="footer" class="dialog-footer">
@@ -702,21 +736,57 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="查询渠道">
-              <el-select v-model="Channel" placeholder="请选择">
+              <el-select v-model="Channel" placeholder="请选择" @change="onChannelChange">
+                <el-option label="ip-api.com (免费)" value="ip-api" />
+                <el-option label="ipinfo.io" value="ipinfo" />
+                <el-option label="ipapi.co" value="ipapi" />
+                <el-option label="ipgeolocation" value="ipgeolocation" />
                 <el-option label="VirtualBrowser" value="virtualbrowser" />
-                <el-option label="ipgeoLocation" value="ipgeolocation" />
               </el-select>
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <div v-if="Channel === 'virtualbrowser'">
+            <div v-if="Channel === 'ip-api'" style="color: #67c23a; font-size: 12px">
+              免费，无需密钥，每分钟45次请求限制
+            </div>
+            <div v-else-if="Channel === 'ipinfo'" style="font-size: 12px">
+              点击
+              <a href="https://ipinfo.io" target="_blank" style="color: #42b983">官网</a>
+              获取免费 Token
+            </div>
+            <div v-else-if="Channel === 'ipapi'" style="font-size: 12px">
+              点击
+              <a href="https://ipapi.co" target="_blank" style="color: #42b983">官网</a>
+              获取 API Key
+            </div>
+            <div v-else-if="Channel === 'ipgeolocation'" style="font-size: 12px">
+              点击
+              <a href="https://ipgeolocation.io" target="_blank" style="color: #42b983">官网</a>
+              获取 API Key
+            </div>
+            <div v-else-if="Channel === 'virtualbrowser'" style="font-size: 12px">
               点击
               <a href="https://virtualbrowser.cc" target="_blank" style="color: #42b983">官网</a>
-              获取API Key
+              获取 API Key
             </div>
           </el-col>
         </el-row>
-        <el-input v-model="apiLink" placeholder="请输入IP查询API链接" />
+        <el-input
+          v-model="apiLink"
+          placeholder="API链接将根据渠道自动填充，也可手动修改"
+          style="margin-top: 10px"
+        />
+        <div style="font-size: 12px; color: #909399; margin-top: 8px">
+          <div v-if="Channel === 'ip-api'">默认链接: http://ip-api.com/json</div>
+          <div v-else-if="Channel === 'ipinfo'">格式: https://ipinfo.io/json?token=YOUR_TOKEN</div>
+          <div v-else-if="Channel === 'ipapi'">格式: https://ipapi.co/YOUR_KEY/json/</div>
+          <div v-else-if="Channel === 'ipgeolocation'">
+            格式: https://api.ipgeolocation.io/ipgeo?apiKey=YOUR_KEY
+          </div>
+          <div v-else-if="Channel === 'virtualbrowser'">
+            格式: https://api.virtualbrowser.cc/ipgeo?key=YOUR_KEY
+          </div>
+        </div>
       </el-form>
       <span slot="footer" class="dialog-footer">
         <el-button @click="showSetDialog = false">取消</el-button>
@@ -776,6 +846,7 @@ import uaFullVersions from '@/utils/ua-full-versions.json'
 import WebGLRenders from '@/utils/webgl.json'
 import { getFontList } from '@/utils/fonts'
 import { compareVersions } from 'compare-versions'
+import { fetchIpGeoData, generateBrowserConfig, IP_API_TYPES } from '@/utils/ipApiAdapter'
 
 let IPGeo = {}
 let fontList = []
@@ -872,8 +943,8 @@ export default {
       showSetApiDialog: false,
       dialogBatchSetGroupVisible: false,
       selectedGroup: '默认分组',
-      apiLink: '',
-      Channel: 'virtualbrowser',
+      apiLink: 'http://ip-api.com/json',
+      Channel: 'ip-api',
       saveApi: false,
       selectedRows: [],
       chromeVer: '',
@@ -896,6 +967,9 @@ export default {
       },
       form: {
         numberOfEnvironments: 1,
+        namePrefix: '',
+        remarkPrefix: '',
+        startNumber: 1,
         proxyType: '默认',
         proxyAPI: '',
         proxy: {},
@@ -1096,8 +1170,11 @@ export default {
   beforeCreate() {
     window._updateState = runingIds => {
       this.list = (this.list || []).map(item => {
+        const wasRunning = item.isRunning
         item.isRunning = runingIds.includes(item.id.toString())
-        if (item.isRunning) {
+
+        // 如果状态从加载中变为运行或停止，重置加载状态
+        if (item.runLoading && (item.isRunning || wasRunning !== item.isRunning)) {
           item.runLoading = false
         }
 
@@ -1119,15 +1196,41 @@ export default {
     const storedApiLink = store.apiLink
     if (storedApiLink) {
       this.apiLink = storedApiLink
-      this.Channel = store.Channel
+      this.Channel = store.Channel || 'ip-api'
+    } else {
+      // 使用默认值
+      this.apiLink = 'http://ip-api.com/json'
+      this.Channel = 'ip-api'
     }
 
-    const res = await fetch(this.apiLink)
-      .then(req => req.json())
-      .catch(console.warn)
+    // 使用适配器获取 IP 地理位置数据
+    if (this.apiLink) {
+      try {
+        const isIpGeoApi =
+          this.apiLink.includes('ip-api.com') ||
+          this.apiLink.includes('ipinfo.io') ||
+          this.apiLink.includes('ipapi.co') ||
+          this.apiLink.includes('ipgeolocation')
 
-    if (res) {
-      IPGeo = res
+        if (isIpGeoApi) {
+          // 使用适配器获取标准化的地理位置数据
+          const geoData = await fetchIpGeoData(this.apiLink)
+          IPGeo = generateBrowserConfig(geoData)
+          console.log('IP 地理位置数据已加载:', geoData)
+        } else {
+          // 原有的自定义 API 处理
+          const res = await fetch(this.apiLink)
+            .then(req => req.json())
+            .catch(console.warn)
+          if (res) {
+            IPGeo = res
+          }
+        }
+      } catch (error) {
+        console.warn('获取 IP 地理位置失败:', error)
+        // 使用默认空数据
+        IPGeo = {}
+      }
     }
 
     fontList = getFontList()
@@ -1209,6 +1312,31 @@ export default {
         this.launchEnvironment(row, i * 2000)
       }
     },
+    handleBatchStop() {
+      if (this.selectedRows.length === 0) {
+        this.$notify({
+          title: '错误提示',
+          message: '至少需要勾选一个环境',
+          type: 'warning',
+          duration: 2000
+        })
+        return
+      }
+      // 只停止运行中的浏览器
+      const runningBrowsers = this.selectedRows.filter(row => row.isRunning)
+      if (runningBrowsers.length === 0) {
+        this.$notify({
+          title: '提示',
+          message: '没有运行中的浏览器需要停止',
+          type: 'info',
+          duration: 2000
+        })
+        return
+      }
+      runningBrowsers.forEach(row => {
+        this.handleStop(row)
+      })
+    },
     launchEnvironment(row, delay) {
       setTimeout(() => {
         this.handleLaunch(row)
@@ -1261,16 +1389,18 @@ export default {
         },
         'ua-language': {
           mode: 2,
-          language: IPGeo.languages?.split(',')[0] || '',
-          value: IPGeo.languages
+          language: IPGeo['ua-language']?.value || IPGeo.languages?.split(',')[0] || '',
+          value: IPGeo['ua-language']?.value || IPGeo.languages || ''
         },
         'time-zone': {
           mode: 2,
-          zone: this.getZone(currentZone?.offset || 0),
-          utc: currentZone?.utc[0] || '',
-          locale: IPGeo.languages?.split(',')[0] || '',
-          name: currentZone?.text || '',
-          value: currentZone?.offset || 0
+          zone: IPGeo['time-zone']?.zone || this.getZone(currentZone?.offset || 0),
+          utc: IPGeo['time-zone']?.utc || currentZone?.utc[0] || '',
+          locale: IPGeo['time-zone']?.locale || IPGeo.languages?.split(',')[0] || '',
+          name: IPGeo['time-zone']?.name || currentZone?.text || '',
+          value: IPGeo['time-zone']?.zone
+            ? parseFloat(IPGeo['time-zone'].zone.replace('UTC', '').replace(':', '.'))
+            : currentZone?.offset || 0
         },
         webrtc: {
           mode: 0
@@ -1278,9 +1408,9 @@ export default {
         location: {
           mode: 2,
           enable: 1,
-          longitude: IPGeo.longitude,
-          latitude: IPGeo.latitude,
-          precision: random.int(10, 5000)
+          longitude: IPGeo.location?.longitude || IPGeo.longitude,
+          latitude: IPGeo.location?.latitude || IPGeo.latitude,
+          precision: IPGeo.location?.precision || random.int(10, 5000)
         },
         screen: {
           mode: 0,
@@ -1336,7 +1466,13 @@ export default {
         mac: { mode: 1, value: genRandomMacAddr() },
         dnt: { mode: 1, value: 0 },
         'port-scan': { mode: 1, value: [] },
-        gpu: { mode: 1, value: 1 }
+        gpu: { mode: 1, value: 1 },
+        window_title: {
+          mode: 0,
+          value: ''
+        },
+        remark: '',
+        debug_port: null
       }
     },
     getCurrentTimeZone() {
@@ -1539,12 +1675,72 @@ export default {
         })
         .catch(() => {})
     },
-    handleLaunch(row) {
-      if (row.proxy && row.proxy.API) {
-        this.GetAPIProxy(row)
-      }
-      chromeSend('launchBrowser', row.id.toString())
+    async handleLaunch(row) {
       row.runLoading = true
+      try {
+        // 如果配置了代理API，先获取代理
+        if (row.proxy && row.proxy.API) {
+          await this.GetAPIProxy(row)
+        }
+
+        // 调用 Launcher API 启动浏览器
+        const result = await chromeSend('launchBrowser', row.id.toString())
+        console.log('浏览器启动成功:', result)
+
+        // 保存调试端口
+        if (result && result.data && result.data.debug_port) {
+          row.debug_port = result.data.debug_port
+        }
+
+        // 同步最新运行状态
+        await updateRuningState()
+
+        this.$notify({
+          title: '启动成功',
+          message: `浏览器 "${row.name}" 已启动 (端口: ${row.debug_port || '未知'})`,
+          type: 'success',
+          duration: 2000
+        })
+      } catch (error) {
+        console.error('启动浏览器失败:', error)
+        this.$notify({
+          title: '启动失败',
+          message: error.message || '启动浏览器时发生错误',
+          type: 'error',
+          duration: 3000
+        })
+      } finally {
+        // 无论成功失败，都要关闭加载状态
+        row.runLoading = false
+      }
+    },
+    async handleStop(row) {
+      row.stopLoading = true
+      try {
+        // 调用 Launcher API 停止浏览器
+        const result = await chromeSend('stopBrowser', row.id.toString())
+        console.log('浏览器停止成功:', result)
+
+        // 同步最新运行状态
+        await updateRuningState()
+
+        this.$notify({
+          title: '停止成功',
+          message: `浏览器 "${row.name}" 已停止`,
+          type: 'success',
+          duration: 2000
+        })
+      } catch (error) {
+        console.error('停止浏览器失败:', error)
+        this.$notify({
+          title: '停止失败',
+          message: error.message || '停止浏览器时发生错误',
+          type: 'error',
+          duration: 3000
+        })
+      } finally {
+        row.stopLoading = false
+      }
     },
     onReRandomComputerName() {
       this.form['device-name'].value = genRandomComputerName()
@@ -1640,6 +1836,59 @@ export default {
       this.$set(this.form.proxy, 'API', data)
     },
     async fetchAndParseAPI(apiData) {
+      // 判断是否为 IP 地理位置 API（如 ip-api.com、ipinfo.io 等）
+      const isIpGeoApi =
+        apiData.includes('ip-api.com') ||
+        apiData.includes('ipinfo.io') ||
+        apiData.includes('ipapi.co') ||
+        apiData.includes('ipgeolocation')
+
+      if (isIpGeoApi) {
+        // 使用适配器获取 IP 地理位置数据
+        try {
+          const geoData = await fetchIpGeoData(apiData)
+
+          // 检查 API 限制错误
+          if (geoData._raw) {
+            const raw = geoData._raw
+            if (raw.status === 'fail' || raw.message?.includes('limit')) {
+              this.$notify({
+                title: '错误提示',
+                message: raw.message || 'API 请求受限，请检查 API Key 或使用其他服务',
+                type: 'warning',
+                duration: 3000
+              })
+              throw new Error('API 限制: ' + (raw.message || '未知错误'))
+            }
+          }
+
+          // 存储地理位置数据供后续使用
+          IPGeo = generateBrowserConfig(geoData)
+
+          // 返回包含 IP 的数据（代理 API 格式兼容）
+          return {
+            ip: geoData.ip,
+            country: geoData.country_name,
+            country_code: geoData.country_code2,
+            city: geoData.city,
+            timezone: geoData.time_zone?.name,
+            // 标记为 IP 地理位置 API 数据
+            _isIpGeoData: true,
+            _geoData: geoData
+          }
+        } catch (error) {
+          console.error('IP Geo API Error:', error)
+          this.$notify({
+            title: '错误提示',
+            message: 'IP 地理位置 API 请求失败: ' + error.message,
+            type: 'warning',
+            duration: 3000
+          })
+          throw error
+        }
+      }
+
+      // 原有的代理 API 处理逻辑
       const response = await fetch(apiData)
       if (!response.ok) {
         this.$notify({
@@ -1655,6 +1904,13 @@ export default {
       const clonedResponse = response.clone()
       try {
         data = await response.json()
+        // 处理 JSON 格式的代理数据，支持多种字段名
+        if (data.ip || data.host) {
+          data.ip = data.ip || data.host
+          data.port = data.port || data.port_number || ''
+          data.user = data.user || data.username || ''
+          data.pass = data.pass || data.password || ''
+        }
       } catch (jsonError) {
         const text = await clonedResponse.text()
         const parts = text.split(':')
@@ -1663,7 +1919,7 @@ export default {
             data = { user: parts[0] || '', pass: parts[1] || '', ip: parts[2], port: parts[3] }
             break
           case 2:
-            data = { ip: parts[0], port: parts[1] }
+            data = { ip: parts[0], port: parts[1], user: '', pass: '' }
             break
           default:
             this.$notify({
@@ -1689,10 +1945,22 @@ export default {
         throw new Error('API 响应不包含 ip 或 port')
       }
 
+      // 确保端口号是字符串类型（避免数字类型问题）
+      data.port = String(data.port)
+
+      console.log('[DEBUG] 代理API返回数据:', data)
       return data
     },
 
     updateProxyData(proxyData, data) {
+      // 如果是 IP 地理位置 API 数据，不更新代理设置，而是更新地理位置设置
+      if (data._isIpGeoData) {
+        // 地理位置数据已通过 IPGeo 变量存储
+        console.log('IP 地理位置数据已获取:', data._geoData)
+        return
+      }
+
+      // 原有的代理 API 数据处理
       proxyData.host = data.ip
       proxyData.port = data.port
       proxyData.user = data.user || ''
@@ -1753,8 +2021,25 @@ export default {
         this.$message.error('无效的环境数量')
         return
       }
+
+      const startNumber = this.form.startNumber || 1
+
       for (let i = 0; i < this.form.numberOfEnvironments; i++) {
         const newEnvironmentData = this.getDefaultForm()
+        const sequenceNumber = startNumber + i
+
+        // 设置名称
+        if (this.form.namePrefix) {
+          newEnvironmentData.name = `${this.form.namePrefix} ${sequenceNumber}`
+        } else {
+          newEnvironmentData.name = `浏览器 ${sequenceNumber}`
+        }
+
+        // 设置备注
+        if (this.form.remarkPrefix) {
+          newEnvironmentData.remark = `${this.form.remarkPrefix} #${sequenceNumber}`
+        }
+
         newEnvironmentData.timestamp = Date.now()
         const uaData = this.updateChromeVer(newEnvironmentData.chrome_version)
         newEnvironmentData.ua.value = uaData.ua
@@ -1776,7 +2061,7 @@ export default {
           await addBrowser(newEnvironmentData)
           this.$notify({
             title: this.$t('browser.success'),
-            message: this.$t('browser.create') + this.$t('browser.success'),
+            message: `已创建 "${newEnvironmentData.name}"`,
             type: 'success',
             duration: 2000
           })
@@ -1787,6 +2072,9 @@ export default {
       }
 
       this.form.numberOfEnvironments = 1
+      this.form.namePrefix = ''
+      this.form.remarkPrefix = ''
+      this.form.startNumber = 1
       this.form.proxyType = '默认'
       this.form.proxyAPI = ''
 
@@ -1847,55 +2135,117 @@ export default {
     },
     async showSettingsDialog() {
       const store = await getGlobalData()
-      this.apiLink = store.apiLink || ''
-      console.log('this.apiLink', store)
+      this.apiLink = store.apiLink || 'http://ip-api.com/json'
+      this.Channel = store.Channel || 'ip-api'
       this.showSetDialog = true
+    },
+    onChannelChange(channel) {
+      // 根据渠道自动填充默认 API Link
+      const defaultLinks = {
+        'ip-api': 'http://ip-api.com/json',
+        ipinfo: 'https://ipinfo.io/json?token=YOUR_TOKEN',
+        ipapi: 'https://ipapi.co/json/',
+        ipgeolocation: 'https://api.ipgeolocation.io/ipgeo?apiKey=YOUR_KEY',
+        virtualbrowser: 'https://api.virtualbrowser.cc/ipgeo?key=YOUR_KEY'
+      }
+      this.apiLink = defaultLinks[channel] || ''
     },
     async saveSettings() {
       const GlobalData = await getGlobalData()
-      if (this.Channel === 'virtualbrowser' && !this.apiLink.includes('virtualbrowser')) {
-        this.$notify({
-          title: '错误',
-          message: '请输入正确的渠道API链接',
-          type: 'error',
-          duration: 2000
-        })
-        return
-      } else if (this.Channel === 'ipgeolocation' && !this.apiLink.includes('ipgeolocation')) {
-        this.$notify({
-          title: '错误',
-          message: '请输入正确的渠道API链接',
-          type: 'error',
-          duration: 2000
-        })
-        return
+
+      // 验证 API 链接格式
+      if (this.apiLink) {
+        // 支持的 IP 查询 API 列表
+        const supportedApis = [
+          'ip-api.com',
+          'ipinfo.io',
+          'ipapi.co',
+          'ipgeolocation.io',
+          'virtualbrowser'
+        ]
+
+        const isSupported = supportedApis.some(api => this.apiLink.includes(api))
+
+        if (!isSupported) {
+          this.$notify({
+            title: '警告',
+            message: '未知的 API 格式，请确保是有效的 IP 查询服务',
+            type: 'warning',
+            duration: 3000
+          })
+          // 继续保存，但给出警告
+        }
       }
-      if (this.apiLink && this.apiLink !== GlobalData.apiLink) {
+
+      // 保存 API 链接
+      if (this.apiLink !== GlobalData.apiLink) {
         await setGlobalData('apiLink', this.apiLink)
         console.log('API链接已保存:', this.apiLink)
       }
+
+      // 保存渠道选择
       if (this.Channel && this.Channel !== GlobalData.Channel) {
         await setGlobalData('Channel', this.Channel)
       }
 
       this.$notify({
         title: '保存成功',
-        message: '保存成功',
+        message: 'IP 查询 API 设置已保存',
         type: 'success',
         duration: 2000
       })
       this.showSetDialog = false
+
+      // 重新加载 IP 地理位置数据
+      if (this.apiLink) {
+        this.reloadIpGeoData()
+      }
     },
     async checkApiLinkSet() {
       const store = await getGlobalData()
       const storedApiLink = store.apiLink
       if (storedApiLink) {
         this.apiLink = storedApiLink
-        this.Channel = store.Channel
+        this.Channel = store.Channel || 'ip-api'
+      } else {
+        // 使用默认值
+        this.apiLink = 'http://ip-api.com/json'
+        this.Channel = 'ip-api'
       }
-      const apiLink = this.apiLink
-      if (!apiLink) {
-        this.showSetDialog = true
+    },
+    async reloadIpGeoData() {
+      // 重新加载 IP 地理位置数据
+      if (!this.apiLink) return
+
+      try {
+        const isIpGeoApi =
+          this.apiLink.includes('ip-api.com') ||
+          this.apiLink.includes('ipinfo.io') ||
+          this.apiLink.includes('ipapi.co') ||
+          this.apiLink.includes('ipgeolocation')
+
+        if (isIpGeoApi) {
+          const geoData = await fetchIpGeoData(this.apiLink)
+          console.log('IP 地理位置数据已重新加载:', geoData)
+
+          // 更新 IPGeo 变量
+          IPGeo = generateBrowserConfig(geoData)
+
+          this.$notify({
+            title: '数据已更新',
+            message: `IP: ${geoData.ip}, 位置: ${geoData.country_name} ${geoData.city}`,
+            type: 'success',
+            duration: 3000
+          })
+        }
+      } catch (error) {
+        console.error('重新加载 IP 地理位置失败:', error)
+        this.$notify({
+          title: '数据加载失败',
+          message: error.message || '无法获取 IP 地理位置数据',
+          type: 'warning',
+          duration: 3000
+        })
       }
     },
     async searchList() {

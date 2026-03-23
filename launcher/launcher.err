@@ -1,0 +1,132 @@
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:9528
+ * Running on http://192.168.2.101:9528
+Press CTRL+C to quit
+ * Restarting with watchdog (windowsapi)
+ * Debugger is active!
+ * Debugger PIN: 638-708-611
+ * Detected change in 'D:\\programs\\develop\\python3.11.8\\Lib\\subprocess.py', reloading
+ * Restarting with watchdog (windowsapi)
+ * Debugger is active!
+ * Debugger PIN: 638-708-611
+ * Detected change in 'D:\\programs\\ai\\iflow\\VirtualBrowser\\launcher\\launcher.py', reloading
+ * Restarting with watchdog (windowsapi)
+ * Debugger is active!
+ * Debugger PIN: 638-708-611
+/2026 22:41:30] "OPTIONS /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 22:41:30] "GET /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 22:47:15] "OPTIONS /api/launch HTTP/1.1" 200 -
+ * Detected change in 'D:\\programs\\develop\\python3.11.8\\Lib\\subprocess.py', reloading
+ * Restarting with watchdog (windowsapi)
+ * Debugger is active!
+ * Debugger PIN: 638-708-611
+127.0.0.1 - - [23/Feb/2026 22:47:28] "OPTIONS /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 22:47:28] "GET /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:14:44] "GET / HTTP/1.1" 404 -
+127.0.0.1 - - [23/Feb/2026 23:14:45] "GET /favicon.ico HTTP/1.1" 404 -
+127.0.0.1 - - [23/Feb/2026 23:14:51] "GET /docs HTTP/1.1" 404 -
+127.0.0.1 - - [23/Feb/2026 23:15:43] "OPTIONS /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:15:43] "GET /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:16:31] "OPTIONS /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:16:32] "GET /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:16:33] "OPTIONS /api/launch HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:16:33] "POST /api/launch HTTP/1.1" 500 -
+Traceback (most recent call last):
+  File "D:\programs\develop\python3.11.8\Lib\site-packages\flask\app.py", line 1536, in __call__
+    return self.wsgi_app(environ, start_response)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\programs\develop\python3.11.8\Lib\site-packages\flask\app.py", line 1514, in wsgi_app
+    response = self.handle_exception(e)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\programs\develop\python3.11.8\Lib\site-packages\flask_cors\extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+                                                ^^^^^^^^^^^^^^^^^^^^
+  File "D:\programs\develop\python3.11.8\Lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\programs\develop\python3.11.8\Lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\programs\develop\python3.11.8\Lib\site-packages\flask_cors\extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+                                                ^^^^^^^^^^^^^^^^^^^^
+  File "D:\programs\develop\python3.11.8\Lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\programs\develop\python3.11.8\Lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\programs\ai\iflow\VirtualBrowser\launcher\launcher.py", line 322, in launch_browser
+    process.start()
+  File "D:\programs\ai\iflow\VirtualBrowser\launcher\launcher.py", line 207, in start
+    self.process = subprocess.Popen(
+                   ^^^^^^^^^^^^^^^^^
+  File "D:\programs\develop\python3.11.8\Lib\subprocess.py", line 1026, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "D:\programs\develop\python3.11.8\Lib\subprocess.py", line 1538, in _execute_child
+    hp, ht, pid, tid = _winapi.CreateProcess(executable, args,
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [WinError 2] 系统找不到指定的文件。
+127.0.0.1 - - [23/Feb/2026 23:17:37] "OPTIONS /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:17:37] "GET /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:19:04] "OPTIONS /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:19:04] "GET /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:20:46] "GET /api/config HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:20:56] "POST /api/launch HTTP/1.1" 400 -
+127.0.0.1 - - [23/Feb/2026 23:21:13] "POST /api/launch HTTP/1.1" 400 -
+127.0.0.1 - - [23/Feb/2026 23:21:46] "POST /api/launch HTTP/1.1" 500 -
+Traceback (most recent call last):
+  File "D:\programs\develop\python3.11.8\Lib\site-packages\flask\app.py", line 1536, in __call__
+    return self.wsgi_app(environ, start_response)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\programs\develop\python3.11.8\Lib\site-packages\flask\app.py", line 1514, in wsgi_app
+    response = self.handle_exception(e)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\programs\develop\python3.11.8\Lib\site-packages\flask_cors\extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+                                                ^^^^^^^^^^^^^^^^^^^^
+  File "D:\programs\develop\python3.11.8\Lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\programs\develop\python3.11.8\Lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\programs\develop\python3.11.8\Lib\site-packages\flask_cors\extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+                                                ^^^^^^^^^^^^^^^^^^^^
+  File "D:\programs\develop\python3.11.8\Lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\programs\develop\python3.11.8\Lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\programs\ai\iflow\VirtualBrowser\launcher\launcher.py", line 322, in launch_browser
+    process.start()
+  File "D:\programs\ai\iflow\VirtualBrowser\launcher\launcher.py", line 207, in start
+    self.process = subprocess.Popen(
+                   ^^^^^^^^^^^^^^^^^
+  File "D:\programs\develop\python3.11.8\Lib\subprocess.py", line 1026, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "D:\programs\develop\python3.11.8\Lib\subprocess.py", line 1538, in _execute_child
+    hp, ht, pid, tid = _winapi.CreateProcess(executable, args,
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [WinError 2] 系统找不到指定的文件。
+ * Detected change in 'D:\\programs\\ai\\iflow\\VirtualBrowser\\launcher\\launcher.py', reloading
+ * Restarting with watchdog (windowsapi)
+ * Debugger is active!
+ * Debugger PIN: 638-708-611
+127.0.0.1 - - [23/Feb/2026 23:23:56] "OPTIONS /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:23:56] "GET /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:23:59] "OPTIONS /api/launch HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:24:00] "POST /api/launch HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:30:05] "OPTIONS /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:30:05] "GET /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:30:27] "OPTIONS /api/launch HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:30:28] "POST /api/launch HTTP/1.1" 400 -
+127.0.0.1 - - [23/Feb/2026 23:30:39] "OPTIONS /api/launch HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:30:39] "POST /api/launch HTTP/1.1" 400 -
+127.0.0.1 - - [23/Feb/2026 23:30:58] "OPTIONS /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:30:58] "GET /api/running HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:31:00] "OPTIONS /api/launch HTTP/1.1" 200 -
+127.0.0.1 - - [23/Feb/2026 23:31:00] "POST /api/launch HTTP/1.1" 200 -

@@ -1,0 +1,116 @@
+
+╔═══════════════════════════════════════════════════════════════╗
+║           VirtualBrowser Launcher                             ║
+║           for fingerprint-chromium (ungoogled-chromium)       ║
+╠═══════════════════════════════════════════════════════════════╣
+║  Chromium Path: D:\programs\ai\iflow\VirtualBrowser\launcher\fingerprint-chromium\chrome.exe ║
+║  Status:        [NOT FOUND]                                  ║
+║  Data Dir:      C:\Users\zhong/.virtualbrowser/profiles        ║
+║  Port:          9528                                           ║
+╚═══════════════════════════════════════════════════════════════╝
+    
+
+[警告] 未找到 fingerprint-chromium 浏览器！
+
+请执行以下步骤之一：
+1. 下载 fingerprint-chromium:
+   https://github.com/adryfish/fingerprint-chromium/releases
+
+2. 解压到以下位置之一：
+   - launcher/fingerprint-chromium/chrome.exe (推荐)
+   - C:ingerprint-chromium\chrome.exe
+   - D:ingerprint-chromium\chrome.exe
+
+3. 或设置环境变量:
+   set CHROMIUM_PATH=你的浏览器路径
+
+4. 构建自己的指纹浏览器:
+   参考 chromium-patches/ 目录下的补丁文件和构建说明
+        
+启动服务: http://localhost:9528
+按 Ctrl+C 停止服务
+
+ * Serving Flask app 'launcher'
+ * Debug mode: on
+
+╔═══════════════════════════════════════════════════════════════╗
+║           VirtualBrowser Launcher                             ║
+║           for fingerprint-chromium (ungoogled-chromium)       ║
+╠═══════════════════════════════════════════════════════════════╣
+║  Chromium Path: D:\programs\ai\iflow\VirtualBrowser\launcher\fingerprint-chromium\chrome.exe ║
+║  Status:        [NOT FOUND]                                  ║
+║  Data Dir:      C:\Users\zhong/.virtualbrowser/profiles        ║
+║  Port:          9528                                           ║
+╚═══════════════════════════════════════════════════════════════╝
+    
+
+[警告] 未找到 fingerprint-chromium 浏览器！
+
+请执行以下步骤之一：
+1. 下载 fingerprint-chromium:
+   https://github.com/adryfish/fingerprint-chromium/releases
+
+2. 解压到以下位置之一：
+   - launcher/fingerprint-chromium/chrome.exe (推荐)
+   - C:ingerprint-chromium\chrome.exe
+   - D:ingerprint-chromium\chrome.exe
+
+3. 或设置环境变量:
+   set CHROMIUM_PATH=你的浏览器路径
+
+4. 构建自己的指纹浏览器:
+   参考 chromium-patches/ 目录下的补丁文件和构建说明
+        
+启动服务: http://localhost:9528
+按 Ctrl+C 停止服务
+
+
+╔═══════════════════════════════════════════════════════════════╗
+║           VirtualBrowser Launcher                             ║
+║           for fingerprint-chromium (ungoogled-chromium)       ║
+╠═══════════════════════════════════════════════════════════════╣
+║  Chromium Path: D:\programs\ai\iflow\VirtualBrowser\launcher\fingerprint-chromium\chrome.exe ║
+║  Status:        [NOT FOUND]                                  ║
+║  Data Dir:      C:\Users\zhong/.virtualbrowser/profiles        ║
+║  Port:          9528                                           ║
+╚═══════════════════════════════════════════════════════════════╝
+    
+
+[警告] 未找到 fingerprint-chromium 浏览器！
+
+请执行以下步骤之一：
+1. 下载 fingerprint-chromium:
+   https://github.com/adryfish/fingerprint-chromium/releases
+
+2. 解压到以下位置之一：
+   - launcher/fingerprint-chromium/chrome.exe (推荐)
+   - C:ingerprint-chromium\chrome.exe
+   - D:ingerprint-chromium\chrome.exe
+
+3. 或设置环境变量:
+   set CHROMIUM_PATH=你的浏览器路径
+
+4. 构建自己的指纹浏览器:
+   参考 chromium-patches/ 目录下的补丁文件和构建说明
+        
+启动服务: http://localhost:9528
+按 Ctrl+C 停止服务
+
+ub.com/adryfish/fingerprint-chromium/releases
+
+2. 解压到以下位置之一：
+   - launcher/fingerprint-chromium/chrome.exe (推荐)
+   - C:ingerprint-chromium\chrome.exe
+   - D:ingerprint-chromium\chrome.exe
+
+3. 或设置环境变量:
+   set CHROMIUM_PATH=你的浏览器路径
+
+4. 构建自己的指纹浏览器:
+   参考 chromium-patches/ 目录下的补丁文件和构建说明
+        
+启动服务: http://localhost:9528
+按 Ctrl+C 停止服务
+
+启动浏览器: D:\programs\ai\iflow\VirtualBrowser\launcher\fingerprint-chromium\chrome.exe --user-data-dir=C:\Users\zhong/.virtualbrowser/profiles\1 --fingerprint=879711462 --fingerprint-platform=windows --fingerprint-gpu-vendor=Google Inc. (Intel) --fingerprint-gpu-renderer=ANGLE (Intel, Intel(R) HD Graphics 520 Direct3D11 vs_5_0 ps_5_0) --fingerprint-hardware-concurrency=12 --timezone=Asia/Hong_Kong --disable-non-proxied-udp --remote-debugging-port=9556 about:blank
+启动浏览器: D:\programs\ai\iflow\VirtualBrowser\launcher\fingerprint-chromium\chrome.exe --user-data-dir=C:\Users\zhong/.virtualbrowser/profiles\test1 --fingerprint=3349476937 --fingerprint-platform=windows --fingerprint-hardware-concurrency=8 --timezone=Asia/Shanghai --lang=zh-CN --accept-lang=zh-CN --disable-non-proxied-udp --remote-debugging-port=9749 about:blank
