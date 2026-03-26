@@ -1,89 +1,149 @@
 import { v4 as uuid_v4 } from 'uuid'
 
 /* eslint-disable */
-window.cr = {}
-cr.__callbacks = {}
-cr.webUIResponse = function (cb, status, data) {
+window.cr = window.cr || {}
+cr.__callbacks = cr.__callbacks || {}
+cr.webUIResponse = function(cb, status, data) {
   const callbackFn = cr.__callbacks[cb]
   callbackFn && callbackFn(data)
 }
 
-window.updateLaunchState = function () {
+window.updateLaunchState = function() {
   updateRuningState()
 }
 
-// Launcher API 配置
 const LAUNCHER_API = 'http://localhost:9528'
-
-// 检测是否在原生 VirtualBrowser 环境中
 const isNativeEnvironment = typeof chrome !== 'undefined' && typeof chrome.send === 'function'
 
-console.log('[Native] Environment:', isNativeEnvironment ? 'Native VirtualBrowser' : 'Launcher Mode')
+let migrationPromise = null
+const MIGRATION_MARKER = 'vb_storage_migrated_v2'
 
-/**
- * Launcher API 请求封装
- */
 async function launcherFetch(endpoint, options = {}) {
   const url = `${LAUNCHER_API}${endpoint}`
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers
+    }
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`)
+  }
+
+  const data = await response.json()
+  if (data && data.error) {
+    throw new Error(data.error)
+  }
+  return data
+}
+
+function normalizeListPayload(payload) {
+  if (payload && Array.isArray(payload.users)) {
+    return payload.users
+  }
+  if (Array.isArray(payload)) {
+    return payload
+  }
+  return []
+}
+
+function readLegacyLocalStorage() {
+  let list = []
+  let group = []
+  let global = {}
+
   try {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
+    const raw = localStorage.getItem('list')
+    const parsed = raw ? JSON.parse(raw) : null
+    list = normalizeListPayload(parsed)
+  } catch (error) {
+    console.warn('[migration] read list failed:', error)
+  }
+
+  try {
+    const raw = localStorage.getItem('group')
+    const parsed = raw ? JSON.parse(raw) : []
+    group = Array.isArray(parsed) ? parsed : []
+  } catch (error) {
+    console.warn('[migration] read group failed:', error)
+  }
+
+  try {
+    const raw = localStorage.getItem('GlobalData')
+    const parsed = raw ? JSON.parse(raw) : {}
+    global = parsed && Object.prototype.toString.call(parsed) === '[object Object]' ? parsed : {}
+  } catch (error) {
+    console.warn('[migration] read global failed:', error)
+  }
+
+  return { list, group, global }
+}
+
+async function migrateLegacyLocalStorageIfNeeded() {
+  if (isNativeEnvironment) {
+    return { migrated: false, reason: 'native-environment' }
+  }
+
+  if (migrationPromise) {
+    return migrationPromise
+  }
+
+  migrationPromise = (async() => {
+    try {
+      const marker = localStorage.getItem(MIGRATION_MARKER)
+      if (marker === '1') {
+        localStorage.setItem(MIGRATION_MARKER, '1')
+        return { migrated: false, reason: 'already-migrated' }
       }
-    })
 
-    // 检查 HTTP 响应状态
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`HTTP ${response.status}: ${errorText || response.statusText}`)
+      const legacy = readLegacyLocalStorage()
+      if (legacy.list.length === 0 && legacy.group.length === 0 && Object.keys(legacy.global).length === 0) {
+        localStorage.setItem(MIGRATION_MARKER, '1')
+        return { migrated: false, reason: 'no-legacy-data' }
+      }
+
+      const result = await launcherFetch('/api/migrate/local-storage', {
+        method: 'POST',
+        body: JSON.stringify(legacy)
+      })
+
+      localStorage.setItem(MIGRATION_MARKER, '1')
+      return { migrated: true, result }
+    } catch (error) {
+      console.warn('[migration] failed:', error)
+      return { migrated: false, reason: 'failed', error: error.message }
     }
+  })()
 
-    const data = await response.json()
-
-    // 检查 API 返回的错误
-    if (data.error) {
-      throw new Error(data.error)
-    }
-
-    return data
-  } catch (err) {
-    console.error('[Launcher API Error]:', err)
-    throw err
-  }
+  return migrationPromise
 }
 
-/**
- * 获取浏览器配置列表 (从localStorage)
- */
-function getStoredBrowserList() {
-  try {
-    const data = JSON.parse(localStorage.getItem('list'))
-    return (data && data.users) || []
-  } catch {
-    return []
-  }
+export async function ensureLegacyMigration() {
+  return migrateLegacyLocalStorageIfNeeded()
 }
 
-/**
- * 保存浏览器配置列表 (到localStorage)
- */
-function setStoredBrowserList(list) {
-  const data = { users: list }
-  localStorage.setItem('list', JSON.stringify(data))
+async function fetchServerBrowserList() {
+  await migrateLegacyLocalStorageIfNeeded()
+  const payload = await launcherFetch('/api/browsers')
+  return normalizeListPayload(payload)
 }
 
-/**
- * 根据ID获取浏览器配置
- */
-function getBrowserConfigById(id) {
-  const list = getStoredBrowserList()
-  return list.find(item => String(item.id) === String(id))
+async function fetchServerGroupList() {
+  await migrateLegacyLocalStorageIfNeeded()
+  const payload = await launcherFetch('/api/groups')
+  return Array.isArray(payload) ? payload : []
+}
+
+async function fetchServerGlobalData() {
+  await migrateLegacyLocalStorageIfNeeded()
+  const payload = await launcherFetch('/api/global')
+  return payload && Object.prototype.toString.call(payload) === '[object Object]' ? payload : {}
 }
 
 export async function chromeSendTimeout(name, timeout = 2000, ...params) {
-  // 如果是原生环境，使用 chrome.send
   if (isNativeEnvironment) {
     const pTimeOut = timeout => {
       return new Promise((resolve, reject) => {
@@ -99,43 +159,43 @@ export async function chromeSendTimeout(name, timeout = 2000, ...params) {
       }
 
       const args = [callbackName].concat(params)
-      console.log(`chrome.send("${name}", `, args, `)`)
       chrome.send(name, args)
     })
 
     return Promise.race([pCall, pTimeOut(timeout)])
   }
 
-  // 否则使用 Launcher API
-  console.log(`[Launcher] ${name}`, params)
-
   switch (name) {
     case 'launchBrowser': {
       const browserId = params[0]
-      const config = getBrowserConfigById(browserId)
+      const list = await fetchServerBrowserList()
+      const config = list.find(item => String(item.id) === String(browserId))
       if (!config) {
         throw new Error('Browser config not found: ' + browserId)
       }
-      
-      // 打印完整的配置信息用于调试
-      console.log('[DEBUG] 启动浏览器配置:', JSON.stringify(config, null, 2))
-      console.log('[DEBUG] 代理配置:', JSON.stringify(config.proxy, null, 2))
-      
+
       const result = await launcherFetch('/api/launch', {
         method: 'POST',
         body: JSON.stringify(config)
       })
-      
+
       return { data: result }
     }
 
     case 'getBrowserList': {
-      const list = getStoredBrowserList()
+      const list = await fetchServerBrowserList()
       return { data: { users: list } }
     }
 
     case 'setBrowserList': {
-      // 由其他函数处理
+      const payload = params[0]
+      const users = normalizeListPayload(payload)
+      for (let i = 0; i < users.length; i++) {
+        await launcherFetch('/api/browsers', {
+          method: 'POST',
+          body: JSON.stringify(users[i])
+        })
+      }
       return { data: 'ok' }
     }
 
@@ -146,11 +206,7 @@ export async function chromeSendTimeout(name, timeout = 2000, ...params) {
 
     case 'deleteBrowser': {
       const browserId = params[0]
-      try {
-        await launcherFetch(`/api/stop/${browserId}`, { method: 'POST' })
-      } catch (e) {
-        // 忽略停止错误
-      }
+      await launcherFetch(`/api/browsers/${browserId}`, { method: 'DELETE' })
       return { data: 'ok' }
     }
 
@@ -161,12 +217,14 @@ export async function chromeSendTimeout(name, timeout = 2000, ...params) {
     }
 
     case 'getGlobalData': {
-      const data = localStorage.getItem('GlobalData')
-      return { data: data || '{}' }
+      const data = await fetchServerGlobalData()
+      return { data: JSON.stringify(data || {}) }
     }
 
     case 'setGlobalData': {
-      // 由 setGlobalData 函数处理
+      const payload = params[0]
+      const parsed = typeof payload === 'string' ? JSON.parse(payload) : payload
+      await launcherFetch('/api/global', { method: 'POST', body: JSON.stringify(parsed || {}) })
       return { data: 'ok' }
     }
 
@@ -175,18 +233,14 @@ export async function chromeSendTimeout(name, timeout = 2000, ...params) {
     }
 
     case 'checkProxy': {
-      // 代理检测功能
       return { data: true }
     }
 
     case 'setIpGeo': {
-      // IP地理位置设置 - fingerprint-chromium 不支持
-      console.log('[Launcher] setIpGeo not supported in fingerprint-chromium')
       return { data: 'ok' }
     }
 
     default:
-      console.warn(`[Launcher] Unknown command: ${name}`)
       return { data: null }
   }
 }
@@ -196,104 +250,101 @@ export async function chromeSend(name, ...params) {
 }
 
 export async function getGlobalData() {
-  let GlobalData
-  try {
-    GlobalData = JSON.parse(localStorage.getItem('GlobalData'))
-    if (Object.prototype.toString.call(GlobalData) === '[object Array]') {
-      GlobalData = {}
+  if (isNativeEnvironment) {
+    try {
+      const ret = await chromeSend('getGlobalData')
+      const parsed = JSON.parse(ret.data)
+      return parsed && Object.prototype.toString.call(parsed) === '[object Object]' ? parsed : {}
+    } catch (error) {
+      console.warn('getGlobalData(native) failed:', error)
+      return {}
     }
-    
-    if (isNativeEnvironment) {
-      GlobalData = await chromeSend('getGlobalData')
-      GlobalData = JSON.parse(GlobalData.data)
-      if (Object.prototype.toString.call(GlobalData) === '[object Array]') {
-        GlobalData = {}
-      }
-    }
-  } catch {
-    //
   }
 
-  return GlobalData || {}
+  return fetchServerGlobalData()
 }
 
 export async function setGlobalData(key, value) {
-  const GlobalData = await getGlobalData()
-  GlobalData[key] = value
+  const data = await getGlobalData()
+  data[key] = value
 
-  localStorage.setItem('GlobalData', JSON.stringify(GlobalData))
-  
   if (isNativeEnvironment) {
-    await chromeSend('setGlobalData', JSON.stringify(GlobalData)).catch(console.warn)
+    await chromeSend('setGlobalData', JSON.stringify(data))
+    return
   }
+
+  await launcherFetch('/api/global', {
+    method: 'POST',
+    body: JSON.stringify(data)
+  })
 }
 
 export async function getBrowserList() {
   if (isNativeEnvironment) {
-    let list
     try {
-      list = JSON.parse(localStorage.getItem('list'))
-      list = await chromeSend('getBrowserList')
-      list = list.data
-    } catch {
-      //
+      const ret = await chromeSend('getBrowserList')
+      return (ret && ret.data && ret.data.users) || []
+    } catch (error) {
+      console.warn('getBrowserList(native) failed:', error)
+      return []
     }
-    return (list && list.users) || []
   }
-  
-  return getStoredBrowserList()
+
+  return fetchServerBrowserList()
 }
 
 export async function addBrowser(item, defaultName) {
-  const prefix = defaultName ? defaultName + ' ' : ''
-  const list = await getBrowserList()
-  const maxId = Math.max(0, Math.max(...list.map(item => item.id)))
-  item.id = maxId + 1
-  item.name = item.name || prefix + item.id
-
-  list.push(item)
-
-  const data = { users: list }
-  localStorage.setItem('list', JSON.stringify(data))
-  
-  if (isNativeEnvironment) {
-    await chromeSend('setBrowserList', data).catch(err => {
-      console.warn(err)
-    })
+  const payload = JSON.parse(JSON.stringify(item || {}))
+  if (!payload.name && defaultName) {
+    payload.name = defaultName
   }
+
+  if (isNativeEnvironment) {
+    const list = await getBrowserList()
+    const maxId = Math.max(0, ...list.map(it => Number(it.id) || 0))
+    payload.id = payload.id || maxId + 1
+    payload.name = payload.name || `${defaultName || 'Browser'} ${payload.id}`
+    list.push(payload)
+    await chromeSend('setBrowserList', { users: list })
+    return
+  }
+
+  await launcherFetch('/api/browsers', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
 }
 
 export async function updateBrowser(item) {
-  const list = await getBrowserList()
-  const idx = list.findIndex(it => it.id === item.id)
-  list[idx] = item
-
-  const data = { users: list }
-  localStorage.setItem('list', JSON.stringify(data))
-  
-  if (isNativeEnvironment) {
-    await chromeSend('setBrowserList', data).catch(err => {
-      console.warn(err)
-    })
+  const payload = JSON.parse(JSON.stringify(item || {}))
+  if (payload.id === undefined || payload.id === null) {
+    throw new Error('updateBrowser requires id')
   }
+
+  if (isNativeEnvironment) {
+    const list = await getBrowserList()
+    const index = list.findIndex(it => String(it.id) === String(payload.id))
+    if (index < 0) {
+      throw new Error('Browser not found: ' + payload.id)
+    }
+    list[index] = payload
+    await chromeSend('setBrowserList', { users: list })
+    return
+  }
+
+  await launcherFetch(`/api/browsers/${payload.id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
 }
 
 export async function deleteBrowser(id) {
-  await chromeSend('deleteBrowser', id).catch(() => {})
-
-  const list = await getBrowserList()
-  const idx = list.findIndex(it => it.id === id)
-
-  list.splice(idx, 1)
-
-  const data = { users: list }
-  localStorage.setItem('list', JSON.stringify(data))
-  
   if (isNativeEnvironment) {
-    await chromeSend('setBrowserList', data).catch(err => {
-      console.warn(err)
-    })
+    await chromeSend('deleteBrowser', id)
+    return
   }
+
+  await launcherFetch(`/api/browsers/${id}`, { method: 'DELETE' })
 }
 
 export async function updateRuningState() {
@@ -310,40 +361,74 @@ export async function getBrowserVersion() {
 }
 
 export async function getGroupList() {
-  let list
-  try {
-    list = JSON.parse(localStorage.getItem('group'))
-  } catch {
-    //
+  if (isNativeEnvironment) {
+    try {
+      const raw = localStorage.getItem('group')
+      const parsed = raw ? JSON.parse(raw) : []
+      return Array.isArray(parsed) ? parsed : []
+    } catch (error) {
+      console.warn('getGroupList(native) failed:', error)
+      return []
+    }
   }
-
-  return list || []
+  return fetchServerGroupList()
 }
 
 export async function addGroup(item, defaultName) {
-  const list = await getGroupList()
-  const maxId = Math.max(0, Math.max(...list.map(item => item.id)))
-  item.id = maxId + 1
-  item.name = item.name || defaultName + ' ' + item.id
+  const payload = JSON.parse(JSON.stringify(item || {}))
+  if (!payload.name && defaultName) {
+    payload.name = `${defaultName}`
+  }
 
-  list.push(item)
+  if (isNativeEnvironment) {
+    const list = await getGroupList()
+    const maxId = Math.max(0, ...list.map(it => Number(it.id) || 0))
+    payload.id = payload.id || maxId + 1
+    payload.name = payload.name || `${defaultName || 'Group'} ${payload.id}`
+    list.push(payload)
+    localStorage.setItem('group', JSON.stringify(list))
+    return
+  }
 
-  localStorage.setItem('group', JSON.stringify(list))
+  await launcherFetch('/api/groups', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
 }
 
 export async function updateGroup(item) {
-  const list = await getGroupList()
-  const idx = list.findIndex(it => it.id === item.id)
-  list[idx] = item
+  const payload = JSON.parse(JSON.stringify(item || {}))
+  if (payload.id === undefined || payload.id === null) {
+    throw new Error('updateGroup requires id')
+  }
 
-  localStorage.setItem('group', JSON.stringify(list))
+  if (isNativeEnvironment) {
+    const list = await getGroupList()
+    const idx = list.findIndex(it => String(it.id) === String(payload.id))
+    if (idx < 0) {
+      throw new Error('Group not found: ' + payload.id)
+    }
+    list[idx] = payload
+    localStorage.setItem('group', JSON.stringify(list))
+    return
+  }
+
+  await launcherFetch(`/api/groups/${payload.id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
 }
 
 export async function deleteGroup(id) {
-  const list = await getGroupList()
-  const idx = list.findIndex(it => it.id === id)
+  if (isNativeEnvironment) {
+    const list = await getGroupList()
+    const idx = list.findIndex(it => String(it.id) === String(id))
+    if (idx >= 0) {
+      list.splice(idx, 1)
+      localStorage.setItem('group', JSON.stringify(list))
+    }
+    return
+  }
 
-  list.splice(idx, 1)
-
-  localStorage.setItem('group', JSON.stringify(list))
+  await launcherFetch(`/api/groups/${id}`, { method: 'DELETE' })
 }
