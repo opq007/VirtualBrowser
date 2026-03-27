@@ -1,2 +1,50 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Build output
+dist/
+*/dist/
+
+# Launcher
 launcher/fingerprint-chromium/
+launcher/__pycache__/
+launcher/.venv/
+launcher/venv/
+
+# Python
+*.pyc
+__pycache__/
+*.pyo
+.env
+*.egg-info/
+.pytest_cache/
+
+# Logs
 */*.log
+logs/
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env.local
+.env.*.local
+
+# SQLite
+*.db
+*.sqlite
+
+# Temporary files
+*.tmp
+*.temp

@@ -45,6 +45,18 @@
         >
           <el-option v-for="item in GroupList" :key="item.id" :value="item.name" />
         </el-select>
+        <el-select
+          v-model="listQuery.tags"
+          multiple
+          filterable
+          clearable
+          collapse-tags
+          :placeholder="$t('browser.tagFilter')"
+          style="width: 200px; margin-right: 10px"
+          @change="handleFilter"
+        >
+          <el-option v-for="tag in allTags" :key="tag" :value="tag" />
+        </el-select>
         <el-input
           v-model="listQuery.title"
           :placeholder="$t('browser.name')"
@@ -127,10 +139,10 @@
       </el-table-column>
       <el-table-column :label="$t('browser.debug_port')" width="110" align="center">
         <template slot-scope="{ row }">
-          <span v-if="row.isRunning && row.debug_port" style="color: #67C23A; font-weight: bold;">
+          <span v-if="row.isRunning && row.debug_port" style="color: #67c23a; font-weight: bold">
             {{ row.debug_port }}
           </span>
-          <span v-else style="color: #909399;">-</span>
+          <span v-else style="color: #909399">-</span>
         </template>
       </el-table-column>
       <el-table-column
@@ -167,19 +179,53 @@
           </el-button>
         </template>
       </el-table-column>
+      <el-table-column :label="$t('browser.tags')" min-width="150px">
+        <template slot-scope="{ row }">
+          <div class="tags-cell">
+            <el-tag
+              v-for="tag in (row.tags || []).slice(0, 3)"
+              :key="tag"
+              size="mini"
+              type="info"
+              style="margin-right: 4px; margin-bottom: 2px"
+            >
+              {{ tag }}
+            </el-tag>
+            <el-tag
+              v-if="(row.tags || []).length > 3"
+              size="mini"
+              type="info"
+              style="margin-right: 4px"
+            >
+              +{{ row.tags.length - 3 }}
+            </el-tag>
+            <el-button
+              type="text"
+              size="mini"
+              icon="el-icon-edit"
+              style="margin-left: 4px"
+              @click="handleEditTags(row)"
+            />
+          </div>
+        </template>
+      </el-table-column>
       <el-table-column
         :label="$t('browser.actions')"
         align="center"
-        width="200"
+        width="250"
         class-name="small-padding fixed-width"
       >
         <template slot-scope="{ row, $index }">
-          <el-button type="primary" @click="handleUpdate(row)">
+          <el-button type="primary" size="mini" @click="handleUpdate(row)">
             {{ $t('browser.edit') }}
+          </el-button>
+          <el-button type="success" size="mini" @click="handleCopy(row)">
+            {{ $t('browser.copy') }}
           </el-button>
           <el-button
             v-if="row.status != 'deleted'"
             type="danger"
+            size="mini"
             @click="handleDelete(row, $index)"
           >
             {{ $t('browser.delete') }}
@@ -693,11 +739,7 @@
           <el-input v-model.number="form.numberOfEnvironments" type="number" min="1" />
         </el-form-item>
         <el-form-item label="名称前缀">
-          <el-input
-            v-model="form.namePrefix"
-            placeholder="例如：测试环境"
-            style="width: 300px"
-          />
+          <el-input v-model="form.namePrefix" placeholder="例如：测试环境" style="width: 300px" />
           <span style="margin-left: 10px; color: #909399; font-size: 12px">
             最终名称格式：前缀 + 序号（例如：测试环境 1）
           </span>
@@ -807,6 +849,34 @@
         <el-button type="primary" @click="applyBatchSetGroup">保存</el-button>
       </span>
     </el-dialog>
+
+    <el-dialog
+      :title="currentTagRow ? $t('browser.editTags') : $t('browser.batchTags')"
+      :visible.sync="dialogTagsVisible"
+      width="40%"
+    >
+      <el-form>
+        <el-form-item :label="$t('browser.tags')">
+          <el-select
+            v-model="tagForm.tags"
+            multiple
+            filterable
+            allow-create
+            default-first-option
+            :placeholder="$t('browser.tagPlaceholder')"
+            style="width: 100%"
+          >
+            <el-option v-for="tag in allTags" :key="tag" :label="tag" :value="tag" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <span slot="footer" class="dialog-footer">
+        <el-button @click="dialogTagsVisible = false">{{ $t('browser.cancel') }}</el-button>
+        <el-button type="primary" @click="currentTagRow ? saveTags() : applyBatchSetTags()">
+          {{ $t('browser.confirm') }}
+        </el-button>
+      </span>
+    </el-dialog>
   </div>
 </template>
 
@@ -846,7 +916,7 @@ import uaFullVersions from '@/utils/ua-full-versions.json'
 import WebGLRenders from '@/utils/webgl.json'
 import { getFontList } from '@/utils/fonts'
 import { compareVersions } from 'compare-versions'
-import { fetchIpGeoData, generateBrowserConfig, IP_API_TYPES } from '@/utils/ipApiAdapter'
+import { fetchIpGeoData, generateBrowserConfig } from '@/utils/ipApiAdapter'
 
 let IPGeo = {}
 let fontList = []
@@ -942,6 +1012,7 @@ export default {
       showSetDialog: false,
       showSetApiDialog: false,
       dialogBatchSetGroupVisible: false,
+      dialogTagsVisible: false,
       selectedGroup: '默认分组',
       apiLink: 'http://ip-api.com/json',
       Channel: 'ip-api',
@@ -949,13 +1020,15 @@ export default {
       selectedRows: [],
       chromeVer: '',
       tableKey: 0,
+      sourceList: [],
       list: null,
       listLoading: true,
       listQuery: {
         page: 1,
         limit: 5,
         title: undefined,
-        group: ''
+        group: '',
+        tags: []
       },
       dialogFormVisible: false,
       dialogVisible: false,
@@ -965,6 +1038,10 @@ export default {
         update: this.$t('browser.edit'),
         create: this.$t('browser.add')
       },
+      tagForm: {
+        tags: []
+      },
+      currentTagRow: null,
       form: {
         numberOfEnvironments: 1,
         namePrefix: '',
@@ -1085,6 +1162,15 @@ export default {
   computed: {
     language() {
       return this.$store.getters.language
+    },
+    allTags() {
+      const tags = new Set()
+      ;(this.sourceList || []).forEach(item => {
+        if (item.tags && Array.isArray(item.tags)) {
+          item.tags.forEach(tag => tags.add(tag))
+        }
+      })
+      return Array.from(tags)
     }
   },
   watch: {
@@ -1169,17 +1255,24 @@ export default {
   },
   beforeCreate() {
     window._updateState = runingIds => {
-      this.list = (this.list || []).map(item => {
-        const wasRunning = item.isRunning
-        item.isRunning = runingIds.includes(item.id.toString())
+      const runningIdSet = new Set((runingIds || []).map(id => String(id)))
 
-        // 如果状态从加载中变为运行或停止，重置加载状态
-        if (item.runLoading && (item.isRunning || wasRunning !== item.isRunning)) {
-          item.runLoading = false
-        }
+      const applyRunningState = list => {
+        return (list || []).map(item => {
+          const wasRunning = item.isRunning
+          item.isRunning = runningIdSet.has(String(item.id))
 
-        return item
-      })
+          // 如果状态从加载中变为运行或停止，重置加载状态
+          if (item.runLoading && (item.isRunning || wasRunning !== item.isRunning)) {
+            item.runLoading = false
+          }
+
+          return item
+        })
+      }
+
+      this.sourceList = applyRunningState(this.sourceList)
+      this.list = applyRunningState(this.list)
     }
   },
   async created() {
@@ -1282,13 +1375,45 @@ export default {
   methods: {
     async getList() {
       this.listLoading = true
-      this.list = await getBrowserList()
+      this.sourceList = await getBrowserList()
+      this.list = [...this.sourceList]
       this.GlobalData = await getGlobalData()
       this.apiLink = this.GlobalData.apiLink || ''
       this.Channel = this.GlobalData.Channel || ''
-      this.processUpdateData()
+      await this.processUpdateData()
       await updateRuningState()
+      this.searchList()
       this.listLoading = false
+    },
+    searchList() {
+      const source = this.sourceList || []
+      const filteredList = source.filter(item => {
+        // 名称过滤
+        if (this.listQuery.title) {
+          const keyword = this.listQuery.title.toLowerCase()
+          const itemName = String(item.name || '').toLowerCase()
+          const itemId = String(item.id || '').toLowerCase()
+          if (!itemName.includes(keyword) && !itemId.includes(keyword)) {
+            return false
+          }
+        }
+        // 分组过滤
+        if (this.listQuery.group && item.group !== this.listQuery.group) {
+          return false
+        }
+        // 标签过滤（OR逻辑：只要包含任一选中标签即可）
+        if (this.listQuery.tags && this.listQuery.tags.length > 0) {
+          if (!item.tags || !Array.isArray(item.tags)) {
+            return false
+          }
+          const hasAnyTag = this.listQuery.tags.some(tag => item.tags.includes(tag))
+          if (!hasAnyTag) {
+            return false
+          }
+        }
+        return true
+      })
+      this.list = filteredList
     },
     handleFilter() {
       this.listQuery.page = 1
@@ -1536,8 +1661,8 @@ export default {
       })
     },
     async processUpdateData() {
-      for (let i = 0; i < this.list.length; i++) {
-        const item = this.list[i]
+      for (let i = 0; i < this.sourceList.length; i++) {
+        const item = this.sourceList[i]
         if (this.processData(item)) {
           await updateBrowser(item)
         }
@@ -2133,6 +2258,126 @@ export default {
         })
         .catch(() => {})
     },
+    async handleCopy(row) {
+      const newRow = JSON.parse(JSON.stringify(row))
+      newRow.id = undefined
+      newRow.name = row.name + ' (副本)'
+      newRow.timestamp = Date.now()
+
+      // 重新生成随机指纹参数
+      const defaultForm = this.getDefaultForm()
+      newRow.ua = { ...defaultForm.ua, mode: row.ua.mode }
+      newRow['ua-full-version'] = {
+        ...defaultForm['ua-full-version'],
+        mode: row['ua-full-version'].mode
+      }
+      newRow['sec-ch-ua'] = { ...defaultForm['sec-ch-ua'], mode: row['sec-ch-ua'].mode }
+      newRow['ua-language'] = { ...defaultForm['ua-language'], mode: row['ua-language'].mode }
+      newRow['time-zone'] = { ...defaultForm['time-zone'], mode: row['time-zone'].mode }
+      newRow.location = {
+        ...defaultForm.location,
+        mode: row.location.mode,
+        enable: row.location.enable
+      }
+      newRow.screen = { ...defaultForm.screen, mode: row.screen.mode }
+      newRow.fonts = { ...defaultForm.fonts, mode: row.fonts.mode }
+      newRow.canvas = { ...defaultForm.canvas, mode: row.canvas.mode }
+      newRow['webgl-img'] = { ...defaultForm['webgl-img'], mode: row['webgl-img'].mode }
+      newRow.webgl = { ...defaultForm.webgl, mode: row.webgl.mode }
+      newRow['audio-context'] = { ...defaultForm['audio-context'], mode: row['audio-context'].mode }
+      newRow['client-rects'] = { ...defaultForm['client-rects'], mode: row['client-rects'].mode }
+      newRow.speech_voices = { ...defaultForm.speech_voices, mode: row.speech_voices.mode }
+      newRow.cpu = { ...defaultForm.cpu }
+      newRow.memory = { ...defaultForm.memory }
+      newRow['device-name'] = { ...defaultForm['device-name'], mode: row['device-name'].mode }
+      newRow.mac = { ...defaultForm.mac, mode: row.mac.mode }
+      newRow.dnt = { ...defaultForm.dnt }
+      newRow.ssl = { ...defaultForm.ssl }
+      newRow['port-scan'] = { ...defaultForm['port-scan'] }
+      newRow.gpu = { ...defaultForm.gpu }
+
+      // 保留代理设置
+      newRow.proxy = { ...row.proxy }
+
+      // 保留标签
+      newRow.tags = row.tags || []
+
+      this.preProcessData(newRow)
+      await addBrowser(newRow)
+      this.getList()
+      this.$notify({
+        title: this.$t('browser.success'),
+        message: `已复制 "${row.name}" 为 "${newRow.name}"`,
+        type: 'success',
+        duration: 2000
+      })
+    },
+    async handleBatchCopy() {
+      if (this.selectedRows.length === 0) {
+        this.$notify({
+          title: '错误提示',
+          message: '至少需要勾选一个环境',
+          type: 'warning',
+          duration: 2000
+        })
+        return
+      }
+
+      for (const row of this.selectedRows) {
+        await this.handleCopy(row)
+      }
+    },
+    handleEditTags(row) {
+      this.currentTagRow = row
+      this.tagForm.tags = row.tags || []
+      this.dialogTagsVisible = true
+    },
+    async saveTags() {
+      if (!this.currentTagRow) return
+
+      this.currentTagRow.tags = [...this.tagForm.tags]
+      await updateBrowser(this.currentTagRow)
+      this.getList()
+      this.dialogTagsVisible = false
+      this.$notify({
+        title: this.$t('browser.success'),
+        message: '标签已更新',
+        type: 'success',
+        duration: 2000
+      })
+    },
+    async handleBatchSetTags() {
+      if (this.selectedRows.length === 0) {
+        this.$notify({
+          title: '错误提示',
+          message: '至少需要勾选一个环境',
+          type: 'warning',
+          duration: 2000
+        })
+        return
+      }
+
+      this.currentTagRow = null
+      this.tagForm.tags = []
+      this.dialogTagsVisible = true
+    },
+    async applyBatchSetTags() {
+      if (this.selectedRows.length === 0) return
+
+      for (const row of this.selectedRows) {
+        row.tags = [...this.tagForm.tags]
+        await updateBrowser(row)
+      }
+
+      this.getList()
+      this.dialogTagsVisible = false
+      this.$notify({
+        title: this.$t('browser.success'),
+        message: `已更新 ${this.selectedRows.length} 个环境的标签`,
+        type: 'success',
+        duration: 2000
+      })
+    },
     async showSettingsDialog() {
       const store = await getGlobalData()
       this.apiLink = store.apiLink || 'http://ip-api.com/json'
@@ -2246,27 +2491,6 @@ export default {
           type: 'warning',
           duration: 3000
         })
-      }
-    },
-    async searchList() {
-      try {
-        let fullList = await getBrowserList()
-        fullList = fullList.filter(item => {
-          return this.listQuery.group === '' || item.group === this.listQuery.group
-        })
-
-        if (this.listQuery.title) {
-          const searchQueryLower = this.listQuery.title.toLowerCase()
-          this.list = fullList.filter(item => {
-            const itemName = String(item.name)
-            const itemId = String(item.id)
-            return itemName.includes(searchQueryLower) || itemId.includes(searchQueryLower)
-          })
-        } else {
-          this.list = fullList
-        }
-      } catch (error) {
-        console.error('Search failed:', error)
       }
     },
     handleBatchSetGroup() {
