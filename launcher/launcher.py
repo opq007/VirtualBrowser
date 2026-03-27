@@ -11,6 +11,8 @@ VirtualBrowser Launcher - fingerprint-chromium 适配器
 import os
 import sys
 import json
+import sqlite3
+import time
 import subprocess
 import asyncio
 import uuid
@@ -29,8 +31,12 @@ from flask_cors import CORS
 # 设置控制台输出编码为 UTF-8，避免 UnicodeEncodeError
 if platform.system() == 'Windows':
     try:
-        sys.stdout.reconfigure(encoding='utf-8')
-        sys.stderr.reconfigure(encoding='utf-8')
+        stdout_reconfigure = getattr(sys.stdout, 'reconfigure', None)
+        stderr_reconfigure = getattr(sys.stderr, 'reconfigure', None)
+        if callable(stdout_reconfigure):
+            stdout_reconfigure(encoding='utf-8')
+        if callable(stderr_reconfigure):
+            stderr_reconfigure(encoding='utf-8')
     except:
         # 如果 reconfigure 不可用，尝试使用 setlocale
         import locale
@@ -71,11 +77,238 @@ CONFIG = {
     'port': int(os.environ.get('PORT', 9528)),
 }
 
+DB_PATH = os.path.join(CONFIG['data_dir'], 'virtualbrowser.db')
+db_lock = threading.Lock()
+
 # 运行中的浏览器进程
 running_browsers: Dict[str, 'BrowserProcess'] = {}
 
 # 本地代理转发服务
 local_proxies: Dict[str, 'LocalProxyForwarder'] = {}
+
+
+def _now_ms() -> int:
+    return int(time.time() * 1000)
+
+
+def get_db_connection():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_storage():
+    os.makedirs(CONFIG['data_dir'], exist_ok=True)
+    with db_lock:
+        conn = get_db_connection()
+        try:
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS browsers (
+                    id TEXT PRIMARY KEY,
+                    data TEXT NOT NULL,
+                    name TEXT,
+                    group_name TEXT,
+                    updated_at INTEGER NOT NULL
+                )
+            ''')
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS groups_storage (
+                    id TEXT PRIMARY KEY,
+                    data TEXT NOT NULL,
+                    name TEXT,
+                    updated_at INTEGER NOT NULL
+                )
+            ''')
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS global_storage (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    data TEXT NOT NULL,
+                    updated_at INTEGER NOT NULL
+                )
+            ''')
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS migrations (
+                    key TEXT PRIMARY KEY,
+                    updated_at INTEGER NOT NULL
+                )
+            ''')
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def _next_numeric_browser_id(conn) -> str:
+    rows = conn.execute('SELECT id FROM browsers').fetchall()
+    max_id = 0
+    for row in rows:
+        value = str(row['id'])
+        if value.isdigit():
+            max_id = max(max_id, int(value))
+    return str(max_id + 1)
+
+
+def load_browsers() -> List[dict]:
+    with db_lock:
+        conn = get_db_connection()
+        try:
+            rows = conn.execute('''
+                SELECT data FROM browsers
+                ORDER BY CASE WHEN id GLOB '[0-9]*' THEN 0 ELSE 1 END,
+                         CAST(id AS INTEGER),
+                         id
+            ''').fetchall()
+            result = []
+            for row in rows:
+                try:
+                    result.append(json.loads(row['data']))
+                except Exception:
+                    continue
+            return result
+        finally:
+            conn.close()
+
+
+def upsert_browser(raw_item: dict) -> dict:
+    item = json.loads(json.dumps(raw_item or {}))
+    with db_lock:
+        conn = get_db_connection()
+        try:
+            browser_id = item.get('id')
+            if browser_id is None or str(browser_id).strip() == '':
+                browser_id = _next_numeric_browser_id(conn)
+            browser_id = str(browser_id)
+            item['id'] = int(browser_id) if browser_id.isdigit() else browser_id
+            now = _now_ms()
+            conn.execute(
+                '''
+                INSERT INTO browsers (id, data, name, group_name, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                  data=excluded.data,
+                  name=excluded.name,
+                  group_name=excluded.group_name,
+                  updated_at=excluded.updated_at
+                ''',
+                (
+                    browser_id,
+                    json.dumps(item, ensure_ascii=False),
+                    str(item.get('name', '')),
+                    str(item.get('group', '')),
+                    now,
+                ),
+            )
+            conn.commit()
+            return item
+        finally:
+            conn.close()
+
+
+def delete_browser_storage(browser_id: str):
+    with db_lock:
+        conn = get_db_connection()
+        try:
+            conn.execute('DELETE FROM browsers WHERE id = ?', (str(browser_id),))
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def load_groups() -> List[dict]:
+    with db_lock:
+        conn = get_db_connection()
+        try:
+            rows = conn.execute('SELECT data FROM groups_storage ORDER BY updated_at ASC, id ASC').fetchall()
+            result = []
+            for row in rows:
+                try:
+                    result.append(json.loads(row['data']))
+                except Exception:
+                    continue
+            return result
+        finally:
+            conn.close()
+
+
+def upsert_group(raw_item: dict) -> dict:
+    item = json.loads(json.dumps(raw_item or {}))
+    with db_lock:
+        conn = get_db_connection()
+        try:
+            group_id = item.get('id')
+            if group_id is None or str(group_id).strip() == '':
+                rows = conn.execute('SELECT id FROM groups_storage').fetchall()
+                max_id = 0
+                for row in rows:
+                    value = str(row['id'])
+                    if value.isdigit():
+                        max_id = max(max_id, int(value))
+                group_id = str(max_id + 1)
+            group_id = str(group_id)
+            item['id'] = int(group_id) if group_id.isdigit() else group_id
+            now = _now_ms()
+            conn.execute(
+                '''
+                INSERT INTO groups_storage (id, data, name, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                  data=excluded.data,
+                  name=excluded.name,
+                  updated_at=excluded.updated_at
+                ''',
+                (group_id, json.dumps(item, ensure_ascii=False), str(item.get('name', '')), now),
+            )
+            conn.commit()
+            return item
+        finally:
+            conn.close()
+
+
+def delete_group_storage(group_id: str):
+    with db_lock:
+        conn = get_db_connection()
+        try:
+            conn.execute('DELETE FROM groups_storage WHERE id = ?', (str(group_id),))
+            conn.commit()
+        finally:
+            conn.close()
+
+
+def load_global_data() -> dict:
+    with db_lock:
+        conn = get_db_connection()
+        try:
+            row = conn.execute('SELECT data FROM global_storage WHERE id = 1').fetchone()
+            if not row:
+                return {}
+            try:
+                return json.loads(row['data'])
+            except Exception:
+                return {}
+        finally:
+            conn.close()
+
+
+def save_global_data(data: dict):
+    payload = data or {}
+    with db_lock:
+        conn = get_db_connection()
+        try:
+            conn.execute(
+                '''
+                INSERT INTO global_storage (id, data, updated_at)
+                VALUES (1, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                  data=excluded.data,
+                  updated_at=excluded.updated_at
+                ''',
+                (json.dumps(payload, ensure_ascii=False), _now_ms()),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+
+init_storage()
 
 
 class LocalProxyForwarder:
@@ -133,6 +366,8 @@ class LocalProxyForwarder:
         """接受客户端连接"""
         while self.running:
             try:
+                if self.server_socket is None:
+                    return
                 client_socket, _ = self.server_socket.accept()
                 threading.Thread(target=self._handle_client, args=(client_socket,), daemon=True).start()
             except socket.timeout:
@@ -163,6 +398,16 @@ class LocalProxyForwarder:
         upstream_socket.settimeout(30)
         upstream_socket.connect((self.upstream_host, self.upstream_port))
         return upstream_socket
+
+    def _recv_exact(self, sock: socket.socket, size: int) -> bytes:
+        """精确读取指定字节数，避免 SOCKS 握手被分包导致解析失败"""
+        data = b''
+        while len(data) < size:
+            chunk = sock.recv(size - len(data))
+            if not chunk:
+                break
+            data += chunk
+        return data
     
     def _handle_http_request(self, client_socket):
         """处理 HTTP 代理请求（浏览器始终使用 HTTP 协议）"""
@@ -216,6 +461,23 @@ class LocalProxyForwarder:
                     parsed = urlparse(url)
                     target_host = parsed.hostname
                     target_port = parsed.port or 80
+
+                    # 某些客户端可能发送 origin-form（只包含 path），从 Host 头回退解析
+                    if not target_host:
+                        header_text = request.decode('utf-8', errors='ignore')
+                        host_line = next((line for line in header_text.split('\r\n') if line.lower().startswith('host:')), '')
+                        host_value = host_line.split(':', 1)[1].strip() if ':' in host_line else ''
+                        if host_value:
+                            if ':' in host_value:
+                                host_part, port_part = host_value.rsplit(':', 1)
+                                target_host = host_part.strip('[]')
+                                if port_part.isdigit():
+                                    target_port = int(port_part)
+                            else:
+                                target_host = host_value
+                    if not target_host:
+                        print('[PROXY] SOCKS5 HTTP 请求无法解析目标主机')
+                        return
                     
                     # 通过 SOCKS5 连接
                     upstream_socket = self._connect_via_socks5(target_host, target_port)
@@ -283,7 +545,7 @@ class LocalProxyForwarder:
                 upstream_socket.sendall(b'\x05\x01\x00')
             
             # 接收握手响应
-            greeting_response = upstream_socket.recv(2)
+            greeting_response = self._recv_exact(upstream_socket, 2)
             if len(greeting_response) != 2 or greeting_response[0] != 5:
                 print(f'[PROXY] SOCKS5 握手失败')
                 upstream_socket.close()
@@ -298,7 +560,7 @@ class LocalProxyForwarder:
                 auth_request = bytes([1, len(user_bytes)]) + user_bytes + bytes([len(pass_bytes)]) + pass_bytes
                 upstream_socket.sendall(auth_request)
                 
-                auth_response = upstream_socket.recv(2)
+                auth_response = self._recv_exact(upstream_socket, 2)
                 if len(auth_response) != 2 or auth_response[1] != 0:
                     print(f'[PROXY] SOCKS5 认证失败')
                     upstream_socket.close()
@@ -329,9 +591,28 @@ class LocalProxyForwarder:
             upstream_socket.sendall(connect_request)
             
             # 接收 CONNECT 响应
-            connect_response = upstream_socket.recv(10)
-            if len(connect_response) < 4 or connect_response[0] != 5 or connect_response[1] != 0:
-                print(f'[PROXY] SOCKS5 CONNECT 失败: {connect_response[1] if len(connect_response) > 1 else "unknown"}')
+            connect_head = self._recv_exact(upstream_socket, 4)
+            if len(connect_head) < 4 or connect_head[0] != 5 or connect_head[1] != 0:
+                code = connect_head[1] if len(connect_head) > 1 else 'unknown'
+                print(f'[PROXY] SOCKS5 CONNECT 失败: {code}')
+                upstream_socket.close()
+                return None
+
+            atyp = connect_head[3]
+            if atyp == 1:  # IPv4
+                _ = self._recv_exact(upstream_socket, 4 + 2)
+            elif atyp == 3:  # DOMAIN
+                domain_len_bytes = self._recv_exact(upstream_socket, 1)
+                if len(domain_len_bytes) != 1:
+                    print('[PROXY] SOCKS5 CONNECT 响应域名长度读取失败')
+                    upstream_socket.close()
+                    return None
+                domain_len = domain_len_bytes[0]
+                _ = self._recv_exact(upstream_socket, domain_len + 2)
+            elif atyp == 4:  # IPv6
+                _ = self._recv_exact(upstream_socket, 16 + 2)
+            else:
+                print(f'[PROXY] SOCKS5 CONNECT 返回未知地址类型: {atyp}')
                 upstream_socket.close()
                 return None
             
@@ -637,12 +918,60 @@ def convert_config(vb_config: dict) -> BrowserConfig:
     
     # 代理
     proxy = vb_config.get('proxy', {})
+
+    def normalize_proxy_protocol(raw_protocol: str) -> str:
+        protocol = str(raw_protocol or 'HTTP').strip().upper()
+        if protocol in ('SOCKS5', 'SOCKS', 'SOCKS5H'):
+            return 'SOCKS5'
+        if protocol in ('HTTP', 'HTTPS'):
+            return protocol
+        return 'HTTP'
+
     config.proxy_mode = proxy.get('mode', 0)
-    config.proxy_protocol = proxy.get('protocol', 'HTTP')
+    config.proxy_protocol = normalize_proxy_protocol(proxy.get('protocol', 'HTTP'))
     config.proxy_host = proxy.get('host', '')
     config.proxy_port = proxy.get('port', '')
     config.proxy_user = proxy.get('user', '')
     config.proxy_pass = proxy.get('pass', '')
+
+    # 处理可能的 URL 编码凭据（例如 %40, %3A）
+    try:
+        from urllib.parse import unquote
+        if config.proxy_user:
+            config.proxy_user = unquote(str(config.proxy_user))
+        if config.proxy_pass:
+            config.proxy_pass = unquote(str(config.proxy_pass))
+    except Exception:
+        pass
+
+    # 兼容历史代理格式：当 user/pass/host/port 缺失时，尝试从 url 或 value 中恢复
+    # 支持：
+    # - socks5://user:pass@host:port
+    # - user:pass@host:port@socks
+    # - host:port
+    proxy_url = str(proxy.get('url', '') or proxy.get('value', '') or '').strip()
+    if proxy_url and (not config.proxy_host or not config.proxy_port or not config.proxy_user):
+        try:
+            normalized = proxy_url
+            if '@socks' in normalized and '://' not in normalized:
+                normalized = 'socks5://' + normalized.replace('@socks', '')
+            elif '://' not in normalized:
+                normalized = 'http://' + normalized
+
+            from urllib.parse import urlparse, unquote
+            parsed = urlparse(normalized)
+            if parsed.scheme:
+                config.proxy_protocol = normalize_proxy_protocol(parsed.scheme)
+            if parsed.hostname and not config.proxy_host:
+                config.proxy_host = parsed.hostname
+            if parsed.port and not config.proxy_port:
+                config.proxy_port = str(parsed.port)
+            if parsed.username and not config.proxy_user:
+                config.proxy_user = unquote(parsed.username)
+            if parsed.password and not config.proxy_pass:
+                config.proxy_pass = unquote(parsed.password)
+        except Exception:
+            pass
     
     # User-Agent
     ua = vb_config.get('ua', {})
@@ -706,6 +1035,147 @@ def convert_config(vb_config: dict) -> BrowserConfig:
 
 
 # ==================== API 路由 ====================
+
+@app.route('/api/browsers', methods=['GET'])
+def api_get_browsers():
+    """获取浏览器配置列表（持久化）"""
+    return jsonify({'users': load_browsers()})
+
+
+@app.route('/api/browsers', methods=['POST'])
+def api_add_browser():
+    """新增浏览器配置（持久化）"""
+    data = request.json or {}
+    saved = upsert_browser(data)
+    return jsonify({'success': True, 'item': saved})
+
+
+@app.route('/api/browsers/<browser_id>', methods=['PUT'])
+def api_update_browser(browser_id):
+    """更新浏览器配置（持久化）"""
+    data = request.json or {}
+    data['id'] = browser_id
+    saved = upsert_browser(data)
+    return jsonify({'success': True, 'item': saved})
+
+
+@app.route('/api/browsers/<browser_id>', methods=['DELETE'])
+def api_delete_browser(browser_id):
+    """删除浏览器配置（持久化）"""
+    if browser_id in running_browsers:
+        running_browsers[browser_id].stop()
+        del running_browsers[browser_id]
+    delete_browser_storage(browser_id)
+    return jsonify({'success': True})
+
+
+@app.route('/api/groups', methods=['GET'])
+def api_get_groups():
+    return jsonify(load_groups())
+
+
+@app.route('/api/groups', methods=['POST'])
+def api_add_group():
+    data = request.json or {}
+    saved = upsert_group(data)
+    return jsonify({'success': True, 'item': saved})
+
+
+@app.route('/api/groups/<group_id>', methods=['PUT'])
+def api_update_group(group_id):
+    data = request.json or {}
+    data['id'] = group_id
+    saved = upsert_group(data)
+    return jsonify({'success': True, 'item': saved})
+
+
+@app.route('/api/groups/<group_id>', methods=['DELETE'])
+def api_delete_group(group_id):
+    delete_group_storage(group_id)
+    return jsonify({'success': True})
+
+
+@app.route('/api/global', methods=['GET'])
+def api_get_global_data():
+    return jsonify(load_global_data())
+
+
+@app.route('/api/global', methods=['POST'])
+def api_set_global_data():
+    payload = request.json or {}
+    if not isinstance(payload, dict):
+        return jsonify({'error': 'global payload must be object'}), 400
+    save_global_data(payload)
+    return jsonify({'success': True})
+
+
+@app.route('/api/migrate/local-storage', methods=['POST'])
+def api_migrate_local_storage():
+    """导入本地 localStorage 数据到服务端持久化存储"""
+    payload = request.json or {}
+    browsers_payload = payload.get('list', [])
+    groups_payload = payload.get('group', [])
+    global_payload = payload.get('global', {})
+
+    if isinstance(browsers_payload, dict):
+        browsers_payload = browsers_payload.get('users', [])
+
+    if not isinstance(browsers_payload, list):
+        return jsonify({'error': 'list must be array or {users: []}'}), 400
+    if not isinstance(groups_payload, list):
+        return jsonify({'error': 'group must be array'}), 400
+    if not isinstance(global_payload, dict):
+        return jsonify({'error': 'global must be object'}), 400
+
+    imported = {
+        'browsers': 0,
+        'groups': 0,
+        'global_updated': False,
+    }
+
+    for item in browsers_payload:
+        if isinstance(item, dict):
+            upsert_browser(item)
+            imported['browsers'] += 1
+
+    for item in groups_payload:
+        if isinstance(item, dict):
+            upsert_group(item)
+            imported['groups'] += 1
+
+    if global_payload:
+        current = load_global_data()
+        current.update(global_payload)
+        save_global_data(current)
+        imported['global_updated'] = True
+
+    with db_lock:
+        conn = get_db_connection()
+        try:
+            conn.execute(
+                '''
+                INSERT INTO migrations (key, updated_at)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET updated_at=excluded.updated_at
+                ''',
+                ('local_storage_imported', _now_ms()),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    return jsonify({'success': True, 'imported': imported})
+
+
+@app.route('/api/migrate/status', methods=['GET'])
+def api_migrate_status():
+    with db_lock:
+        conn = get_db_connection()
+        try:
+            row = conn.execute('SELECT updated_at FROM migrations WHERE key = ?', ('local_storage_imported',)).fetchone()
+        finally:
+            conn.close()
+    return jsonify({'local_storage_imported': row is not None, 'updated_at': row['updated_at'] if row else None})
 
 @app.route('/api/launch', methods=['POST'])
 def launch_browser():
@@ -810,7 +1280,7 @@ def chrome_launch_browser():
 @app.route('/chrome/send/getBrowserList', methods=['GET'])
 def chrome_get_browser_list():
     """模拟chrome.send('getBrowserList')"""
-    return jsonify({'users': []})  # 由前端localStorage管理
+    return jsonify({'users': load_browsers()})
 
 
 @app.route('/chrome/send/getRuningBrowser', methods=['GET'])
@@ -824,9 +1294,11 @@ def chrome_get_running():
 def chrome_delete_browser():
     """模拟chrome.send('deleteBrowser')"""
     browser_id = request.json.get('id')
+    browser_id = str(browser_id)
     if browser_id in running_browsers:
         running_browsers[browser_id].stop()
         del running_browsers[browser_id]
+    delete_browser_storage(browser_id)
     return jsonify({'success': True})
 
 
@@ -860,9 +1332,9 @@ if __name__ == '__main__':
    https://github.com/adryfish/fingerprint-chromium/releases
 
 2. 解压到以下位置之一：
-   - launcher/fingerprint-chromium/chrome.exe (推荐)
-   - C:\fingerprint-chromium\chrome.exe
-   - D:\fingerprint-chromium\chrome.exe
+    - launcher/fingerprint-chromium/chrome.exe (推荐)
+    - C:\\fingerprint-chromium\\chrome.exe
+    - D:\\fingerprint-chromium\\chrome.exe
 
 3. 或设置环境变量:
    set CHROMIUM_PATH=你的浏览器路径
@@ -873,6 +1345,7 @@ if __name__ == '__main__':
 
     # 确保数据目录存在
     os.makedirs(CONFIG['data_dir'], exist_ok=True)
+    init_storage()
 
     print(f'启动服务: http://localhost:{CONFIG["port"]}')
     print('按 Ctrl+C 停止服务\n')
